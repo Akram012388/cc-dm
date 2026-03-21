@@ -105,6 +105,10 @@ Built on Claude Code Channels (research preview, v2.1.80+). The `--dangerously-l
 Shaikh Akram Ahmed — architect turned builder, Muscat, Oman.
 https://github.com/Akram012388
 
+## Privacy
+
+cc-dm operates entirely on your local machine. All data is stored in a local SQLite file (`~/.cc-dm/bus.db`). No data is transmitted over the network, no telemetry is collected, and no external services are contacted.
+
 ## License
 
 MIT
