@@ -28,12 +28,18 @@ export function initBus(dbPath?: string): void {
     db.run(`
       CREATE TABLE IF NOT EXISTS sessions (
         id            TEXT PRIMARY KEY,
+        name          TEXT NOT NULL DEFAULT '',
         role          TEXT NOT NULL DEFAULT 'worker',
+        cwd           TEXT NOT NULL DEFAULT '',
         status        TEXT NOT NULL DEFAULT 'active',
         last_seen     TEXT NOT NULL,
         registered_at TEXT NOT NULL
       );
     `);
+
+    // Migration: add columns for existing DBs created before this schema
+    try { db.run(`ALTER TABLE sessions ADD COLUMN name TEXT NOT NULL DEFAULT ''`); } catch {}
+    try { db.run(`ALTER TABLE sessions ADD COLUMN cwd TEXT NOT NULL DEFAULT ''`); } catch {}
 
     db.run(`
       CREATE TABLE IF NOT EXISTS messages (
@@ -62,20 +68,30 @@ export function closeBus(): void {
   }
 }
 
-export function registerSession(sessionId: string, role: string): void {
+export function registerSession(sessionId: string, name: string, role: string, cwd: string): void {
   try {
     const now = new Date().toISOString();
     db.run(
-      `INSERT INTO sessions (id, role, status, last_seen, registered_at)
-       VALUES (?, ?, 'active', ?, ?)
+      `INSERT INTO sessions (id, name, role, cwd, status, last_seen, registered_at)
+       VALUES (?, ?, ?, ?, 'active', ?, ?)
        ON CONFLICT(id) DO UPDATE SET
+         name = excluded.name,
          role = excluded.role,
+         cwd = excluded.cwd,
          status = 'active',
          last_seen = excluded.last_seen`,
-      [sessionId, role, now, now]
+      [sessionId, name, role, cwd, now, now]
     );
   } catch (err) {
     console.error("[cc-dm/bus] registerSession failed:", err);
+  }
+}
+
+export function deregisterSession(sessionId: string): void {
+  try {
+    db.run(`DELETE FROM sessions WHERE id = ?`, [sessionId]);
+  } catch (err) {
+    console.error("[cc-dm/bus] deregisterSession failed:", err);
   }
 }
 
@@ -95,7 +111,7 @@ export function expireStaleSessions(): void {
   try {
     const cutoff = new Date(Date.now() - 60_000).toISOString();
     db.run(
-      `UPDATE sessions SET status = 'inactive' WHERE last_seen < ?`,
+      `DELETE FROM sessions WHERE last_seen < ?`,
       [cutoff]
     );
     db.run(
@@ -107,18 +123,39 @@ export function expireStaleSessions(): void {
   }
 }
 
-export function writeMessage(fromSession: string, toSession: string, content: string): boolean {
+export function writeMessage(fromName: string, toSessionId: string, content: string): boolean {
   try {
     const now = new Date().toISOString();
     db.run(
       `INSERT INTO messages (from_session, to_session, content, delivered, created_at)
        VALUES (?, ?, ?, 0, ?)`,
-      [fromSession, toSession, content, now]
+      [fromName, toSessionId, content, now]
     );
     return true;
   } catch (err) {
     console.error("[cc-dm/bus] writeMessage failed:", err);
     return false;
+  }
+}
+
+export function readPendingMessages(sessionId: string): Array<{ id: number; from_session: string; content: string; created_at: string }> {
+  try {
+    return db.query<{ id: number; from_session: string; content: string; created_at: string }, [string]>(
+      `SELECT id, from_session, content, created_at FROM messages
+       WHERE to_session = ? AND delivered = 0
+       ORDER BY id ASC`
+    ).all(sessionId);
+  } catch (err) {
+    console.error("[cc-dm/bus] readPendingMessages failed:", err);
+    return [];
+  }
+}
+
+export function markDelivered(messageId: number): void {
+  try {
+    db.run(`UPDATE messages SET delivered = 1 WHERE id = ?`, [messageId]);
+  } catch (err) {
+    console.error("[cc-dm/bus] markDelivered failed:", err);
   }
 }
 
@@ -148,10 +185,22 @@ export function readMessages(sessionId: string): Array<{ id: number; from_sessio
   }
 }
 
-export function listActiveSessions(): Array<{ id: string; role: string; last_seen: string }> {
+export function findSessionsByName(name: string): Array<{ id: string; name: string; role: string }> {
   try {
-    return db.query<{ id: string; role: string; last_seen: string }, []>(
-      `SELECT id, role, last_seen FROM sessions
+    return db.query<{ id: string; name: string; role: string }, [string]>(
+      `SELECT id, name, role FROM sessions
+       WHERE name = ? AND status = 'active'`
+    ).all(name);
+  } catch (err) {
+    console.error("[cc-dm/bus] findSessionsByName failed:", err);
+    return [];
+  }
+}
+
+export function listActiveSessions(): Array<{ id: string; name: string; role: string; cwd: string; last_seen: string }> {
+  try {
+    return db.query<{ id: string; name: string; role: string; cwd: string; last_seen: string }, []>(
+      `SELECT id, name, role, cwd, last_seen FROM sessions
        WHERE status = 'active'
        ORDER BY registered_at ASC`
     ).all();
@@ -164,9 +213,9 @@ export function listActiveSessions(): Array<{ id: string; role: string; last_see
 // Smoke test — only runs when executed directly: bun run src/bus.ts
 if (import.meta.main) {
   initBus();
-  registerSession("test-session", "worker");
-  writeMessage("test-session", "test-session", "hello from smoke test");
-  const msgs = readMessages("test-session");
+  registerSession("test-id", "test-session", "worker", "/tmp");
+  writeMessage("test-session", "test-id", "hello from smoke test");
+  const msgs = readMessages("test-id");
   console.log("messages:", msgs);
   const sessions = listActiveSessions();
   console.log("sessions:", sessions);

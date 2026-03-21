@@ -6,7 +6,7 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { initBus, readMessages } from "./bus.js";
+import { initBus, readPendingMessages, markDelivered, deregisterSession } from "./bus.js";
 import { handleDm, handleWho, handleRegister, handleBroadcast } from "./tools.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 
@@ -16,7 +16,7 @@ const SESSION_ID =
 
 const SESSION_ROLE = process.env.CC_DM_SESSION_ROLE?.trim() || "worker";
 
-let activeSessionId = SESSION_ID;
+let sessionName = SESSION_ID;
 
 type ChannelNotification = {
   method: "notifications/claude/channel";
@@ -33,7 +33,7 @@ const server = new Server<never, ChannelNotification>(
       experimental: { "claude/channel": {} },
       tools: {},
     },
-    instructions: `You are connected to cc-dm. Your session id is "${SESSION_ID}". Messages from other sessions arrive as <channel source="cc-dm" from_session="..." to_session="...">. Act on messages addressed to your session id or to_session="all". Available tools: register, dm, who, broadcast. Always register your session on startup if not already registered.`,
+    instructions: `You are connected to cc-dm. Your session id is "${SESSION_ID}". Messages from other sessions arrive as <channel source="cc-dm" from_session="..." to_session="...">. Act on messages addressed to your session name or to_session="all". Available tools: register, dm, who, broadcast. Always register your session on startup if not already registered.`,
   }
 );
 
@@ -41,31 +41,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "register",
-      description: "Register this session with a name and role in cc-dm",
+      description: "Register this session with a display name and role in cc-dm",
       inputSchema: {
         type: "object" as const,
         properties: {
-          session_id: {
+          name: {
             type: "string",
-            description: "Unique name for this session e.g. planner, backend, tests",
+            description: "Display name for this session e.g. planner, backend, tests",
           },
           role: {
             type: "string",
             description: "Role description e.g. orchestrator, worker, reviewer",
           },
         },
-        required: ["session_id", "role"],
+        required: ["name", "role"],
       },
     },
     {
       name: "dm",
-      description: "Send a direct message to another session or to all sessions",
+      description: "Send a direct message to another session by name",
       inputSchema: {
         type: "object" as const,
         properties: {
           to: {
             type: "string",
-            description: "Target session id, or 'all' to broadcast",
+            description: "Target session name",
           },
           content: {
             type: "string",
@@ -105,19 +105,19 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   switch (req.params.name) {
     case "register": {
       const result = handleRegister(
-        String(req.params.arguments?.session_id ?? ""),
+        SESSION_ID,
+        String(req.params.arguments?.name ?? ""),
         String(req.params.arguments?.role ?? "")
       );
-      if (result.success && result.sessionId !== activeSessionId) {
-        activeSessionId = result.sessionId;
-        startHeartbeat(activeSessionId);
-        console.error(`cc-dm session identity updated to "${activeSessionId}"`);
+      if (result.success) {
+        sessionName = result.name;
+        console.error(`cc-dm session name updated to "${sessionName}"`);
       }
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     }
     case "dm": {
       const result = handleDm(
-        activeSessionId,
+        sessionName,
         String(req.params.arguments?.to ?? ""),
         String(req.params.arguments?.content ?? "")
       );
@@ -129,7 +129,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     }
     case "broadcast": {
       const result = handleBroadcast(
-        activeSessionId,
+        SESSION_ID,
+        sessionName,
         String(req.params.arguments?.content ?? "")
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
@@ -145,7 +146,7 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 function startPollLoop(): void {
   pollTimer = setInterval(async () => {
     try {
-      const messages = readMessages(activeSessionId);
+      const messages = readPendingMessages(SESSION_ID);
       if (messages.length === 0) return;
 
       for (const message of messages) {
@@ -155,12 +156,13 @@ function startPollLoop(): void {
             content: message.content,
             meta: {
               from_session: message.from_session,
-              to_session: activeSessionId,
+              to_session: sessionName,
               message_id: String(message.id),
               sent_at: message.created_at,
             },
           },
         });
+        markDelivered(message.id);
       }
     } catch (err) {
       console.error("[cc-dm/poll] error:", err);
@@ -178,12 +180,14 @@ export function stopPollLoop(): void {
 function shutdown(): void {
   stopPollLoop();
   stopHeartbeat();
+  deregisterSession(SESSION_ID);
+  console.error(`cc-dm session "${sessionName}" (${SESSION_ID}) deregistered`);
   process.exit(0);
 }
 
 async function main(): Promise<void> {
   initBus();
-  handleRegister(SESSION_ID, SESSION_ROLE);
+  handleRegister(SESSION_ID, SESSION_ID, SESSION_ROLE);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

@@ -12,6 +12,7 @@ import {
   writeMessage,
   readMessages,
   listActiveSessions,
+  findSessionsByName,
 } from "../src/bus.js";
 
 let tmpDbPath: string;
@@ -53,41 +54,45 @@ describe("initBus", () => {
 
 describe("registerSession", () => {
   test("inserts new session", () => {
-    registerSession("alpha", "worker");
+    registerSession("alpha", "alpha-name", "worker", "/tmp");
     const db = new Database(tmpDbPath, { readonly: true });
-    const row = db.query<{ id: string; role: string; status: string }, [string]>(
-      "SELECT id, role, status FROM sessions WHERE id = ?"
+    const row = db.query<{ id: string; name: string; role: string; cwd: string; status: string }, [string]>(
+      "SELECT id, name, role, cwd, status FROM sessions WHERE id = ?"
     ).get("alpha");
     db.close();
     expect(row).not.toBeNull();
     expect(row!.id).toBe("alpha");
+    expect(row!.name).toBe("alpha-name");
     expect(row!.role).toBe("worker");
+    expect(row!.cwd).toBe("/tmp");
     expect(row!.status).toBe("active");
   });
 
   test("upserts on conflict", () => {
-    registerSession("alpha", "worker");
+    registerSession("alpha", "alpha", "worker", "/tmp");
     const db1 = new Database(tmpDbPath, { readonly: true });
     const first = db1.query<{ last_seen: string; role: string }, [string]>(
       "SELECT last_seen, role FROM sessions WHERE id = ?"
     ).get("alpha");
     db1.close();
 
-    registerSession("alpha", "orchestrator");
+    registerSession("alpha", "alpha-renamed", "orchestrator", "/home");
     const db2 = new Database(tmpDbPath, { readonly: true });
-    const second = db2.query<{ last_seen: string; role: string }, [string]>(
-      "SELECT last_seen, role FROM sessions WHERE id = ?"
+    const second = db2.query<{ last_seen: string; role: string; name: string; cwd: string }, [string]>(
+      "SELECT last_seen, role, name, cwd FROM sessions WHERE id = ?"
     ).get("alpha");
     db2.close();
 
     expect(second!.role).toBe("orchestrator");
+    expect(second!.name).toBe("alpha-renamed");
+    expect(second!.cwd).toBe("/home");
     expect(second!.last_seen >= first!.last_seen).toBe(true);
   });
 });
 
 describe("updateHeartbeat", () => {
   test("updates last_seen", () => {
-    registerSession("alpha", "worker");
+    registerSession("alpha", "alpha", "worker", "/tmp");
     const db1 = new Database(tmpDbPath, { readonly: true });
     const before = db1.query<{ last_seen: string }, [string]>(
       "SELECT last_seen FROM sessions WHERE id = ?"
@@ -106,12 +111,12 @@ describe("updateHeartbeat", () => {
 });
 
 describe("expireStaleSessions", () => {
-  test("marks old sessions inactive", () => {
+  test("deletes stale sessions after 60s inactivity", () => {
     const old = new Date(Date.now() - 120_000).toISOString();
     const db = new Database(tmpDbPath);
     db.run(
-      "INSERT INTO sessions (id, role, status, last_seen, registered_at) VALUES (?, ?, 'active', ?, ?)",
-      ["stale-one", "worker", old, old]
+      "INSERT INTO sessions (id, name, role, cwd, status, last_seen, registered_at) VALUES (?, ?, ?, ?, 'active', ?, ?)",
+      ["stale-one", "stale", "worker", "/tmp", old, old]
     );
     db.close();
 
@@ -122,7 +127,7 @@ describe("expireStaleSessions", () => {
       "SELECT status FROM sessions WHERE id = ?"
     ).get("stale-one");
     db2.close();
-    expect(row!.status).toBe("inactive");
+    expect(row).toBeNull();
   });
 
   test("cleans delivered messages older than 1hr", () => {
@@ -145,14 +150,15 @@ describe("expireStaleSessions", () => {
 
 describe("writeMessage", () => {
   test("returns true on success", () => {
-    const ok = writeMessage("a", "b", "hello");
+    const ok = writeMessage("sender-name", "target-id", "hello");
     expect(ok).toBe(true);
 
     const db = new Database(tmpDbPath, { readonly: true });
-    const row = db.query<{ content: string }, [string]>(
-      "SELECT content FROM messages WHERE to_session = ?"
-    ).get("b");
+    const row = db.query<{ from_session: string; content: string }, [string]>(
+      "SELECT from_session, content FROM messages WHERE to_session = ?"
+    ).get("target-id");
     db.close();
+    expect(row!.from_session).toBe("sender-name");
     expect(row!.content).toBe("hello");
   });
 
@@ -167,33 +173,33 @@ describe("writeMessage", () => {
 
 describe("readMessages", () => {
   test("returns undelivered messages", () => {
-    writeMessage("a", "b", "msg1");
-    writeMessage("a", "b", "msg2");
-    const msgs = readMessages("b");
+    writeMessage("sender", "target-id", "msg1");
+    writeMessage("sender", "target-id", "msg2");
+    const msgs = readMessages("target-id");
     expect(msgs).toHaveLength(2);
     expect(msgs[0].content).toBe("msg1");
     expect(msgs[1].content).toBe("msg2");
   });
 
   test("marks messages as delivered", () => {
-    writeMessage("a", "b", "msg1");
-    readMessages("b");
-    const msgs = readMessages("b");
+    writeMessage("sender", "target-id", "msg1");
+    readMessages("target-id");
+    const msgs = readMessages("target-id");
     expect(msgs).toHaveLength(0);
   });
 
   test("is transactional — no duplicates", () => {
-    writeMessage("a", "b", "msg1");
-    const [r1, r2] = [readMessages("b"), readMessages("b")];
+    writeMessage("sender", "target-id", "msg1");
+    const [r1, r2] = [readMessages("target-id"), readMessages("target-id")];
     const total = r1.length + r2.length;
     expect(total).toBe(1);
   });
 
   test("orders by id ASC", () => {
-    writeMessage("x", "target", "first");
-    writeMessage("y", "target", "second");
-    writeMessage("z", "target", "third");
-    const msgs = readMessages("target");
+    writeMessage("x", "target-id", "first");
+    writeMessage("y", "target-id", "second");
+    writeMessage("z", "target-id", "third");
+    const msgs = readMessages("target-id");
     expect(msgs[0].content).toBe("first");
     expect(msgs[1].content).toBe("second");
     expect(msgs[2].content).toBe("third");
@@ -202,20 +208,44 @@ describe("readMessages", () => {
   });
 });
 
+describe("findSessionsByName", () => {
+  test("finds sessions by name", () => {
+    registerSession("id-1", "planner", "worker", "/tmp");
+    const results = findSessionsByName("planner");
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe("id-1");
+    expect(results[0].name).toBe("planner");
+  });
+
+  test("returns multiple matches for same name", () => {
+    registerSession("id-1", "worker", "dev", "/tmp");
+    registerSession("id-2", "worker", "dev", "/home");
+    const results = findSessionsByName("worker");
+    expect(results).toHaveLength(2);
+  });
+
+  test("returns empty for unknown name", () => {
+    const results = findSessionsByName("nonexistent");
+    expect(results).toHaveLength(0);
+  });
+});
+
 describe("listActiveSessions", () => {
-  test("returns only active sessions", () => {
-    registerSession("active-one", "worker");
+  test("returns only active sessions with all fields", () => {
+    registerSession("active-one", "planner", "worker", "/project");
     const old = new Date(Date.now() - 120_000).toISOString();
     const db = new Database(tmpDbPath);
     db.run(
-      "INSERT INTO sessions (id, role, status, last_seen, registered_at) VALUES (?, ?, 'inactive', ?, ?)",
-      ["dead-one", "worker", old, old]
+      "INSERT INTO sessions (id, name, role, cwd, status, last_seen, registered_at) VALUES (?, ?, ?, ?, 'inactive', ?, ?)",
+      ["dead-one", "dead", "worker", "/tmp", old, old]
     );
     db.close();
 
     const sessions = listActiveSessions();
-    const ids = sessions.map((s) => s.id);
-    expect(ids).toContain("active-one");
-    expect(ids).not.toContain("dead-one");
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].id).toBe("active-one");
+    expect(sessions[0].name).toBe("planner");
+    expect(sessions[0].role).toBe("worker");
+    expect(sessions[0].cwd).toBe("/project");
   });
 });

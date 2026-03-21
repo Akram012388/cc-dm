@@ -61,7 +61,7 @@ if (import.meta.main) {
   const { initBus, registerSession, listActiveSessions } = await import("./bus.js");
 
   initBus();
-  registerSession("heartbeat-test", "worker");
+  registerSession("heartbeat-test", "heartbeat-test", "worker", "/tmp");
   startHeartbeat("heartbeat-test");
   console.log("Heartbeat started for heartbeat-test");
 
