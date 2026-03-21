@@ -130,21 +130,27 @@ describe("expireStaleSessions", () => {
     expect(row).toBeNull();
   });
 
-  test("cleans delivered messages older than 1hr", () => {
-    const old = new Date(Date.now() - 7_200_000).toISOString();
+  test("cleans undelivered messages older than 15s", () => {
+    const old = new Date(Date.now() - 30_000).toISOString();
+    const recent = new Date().toISOString();
     const db = new Database(tmpDbPath);
     db.run(
-      "INSERT INTO messages (from_session, to_session, content, delivered, created_at) VALUES (?, ?, ?, 1, ?)",
-      ["a", "b", "old msg", old]
+      "INSERT INTO messages (from_session, to_session, content, delivered, created_at) VALUES (?, ?, ?, 0, ?)",
+      ["a", "b", "stale msg", old]
+    );
+    db.run(
+      "INSERT INTO messages (from_session, to_session, content, delivered, created_at) VALUES (?, ?, ?, 0, ?)",
+      ["a", "b", "fresh msg", recent]
     );
     db.close();
 
     expireStaleSessions();
 
     const db2 = new Database(tmpDbPath, { readonly: true });
-    const count = db2.query<{ cnt: number }, []>("SELECT COUNT(*) as cnt FROM messages").get()!.cnt;
+    const rows = db2.query<{ content: string }, []>("SELECT content FROM messages").all();
     db2.close();
-    expect(count).toBe(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].content).toBe("fresh msg");
   });
 });
 

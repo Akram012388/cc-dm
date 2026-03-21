@@ -115,8 +115,8 @@ export function expireStaleSessions(): void {
       [cutoff]
     );
     db.run(
-      `DELETE FROM messages WHERE delivered = 1 AND created_at < ?`,
-      [new Date(Date.now() - 3_600_000).toISOString()]
+      `DELETE FROM messages WHERE delivered = 0 AND created_at < ?`,
+      [new Date(Date.now() - 15_000).toISOString()]
     );
   } catch (err) {
     console.error("[cc-dm/bus] expireStaleSessions failed:", err);
@@ -153,7 +153,7 @@ export function readPendingMessages(sessionId: string): Array<{ id: number; from
 
 export function markDelivered(messageId: number): void {
   try {
-    db.run(`UPDATE messages SET delivered = 1 WHERE id = ?`, [messageId]);
+    db.run(`DELETE FROM messages WHERE id = ?`, [messageId]);
   } catch (err) {
     console.error("[cc-dm/bus] markDelivered failed:", err);
   }
