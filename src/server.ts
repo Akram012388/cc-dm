@@ -12,6 +12,9 @@ import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 
 const SESSION_ID = `session-${Math.random().toString(16).slice(2, 8)}`;
 
+const NAME_PROVIDED = !!(process.env.CC_DM_SESSION_NAME?.trim() || process.env.CC_DM_SESSION_ID?.trim());
+const ROLE_PROVIDED = !!process.env.CC_DM_SESSION_ROLE?.trim();
+
 const SESSION_NAME =
   process.env.CC_DM_SESSION_NAME?.trim() ||
   process.env.CC_DM_SESSION_ID?.trim() ||
@@ -29,6 +32,10 @@ type ChannelNotification = {
   };
 };
 
+const registrationInstruction = (NAME_PROVIDED && ROLE_PROVIDED)
+  ? `Your session is registered as "${SESSION_NAME}" with role "${SESSION_ROLE}". Do NOT call register unless the user explicitly asks to change the name or role.`
+  : `Your session name${NAME_PROVIDED ? "" : " (not configured)"}${ROLE_PROVIDED ? "" : " and role (not configured)"} need${NAME_PROVIDED || ROLE_PROVIDED ? "s" : ""} to be set. On your first interaction, invoke the /cc-dm:register skill to ask the user for ${!NAME_PROVIDED && !ROLE_PROVIDED ? "their preferred session name and role" : !NAME_PROVIDED ? "their preferred session name" : "their preferred role"}. Do NOT guess or self-assign values.`;
+
 const server = new Server<never, ChannelNotification>(
   { name: "cc-dm", version: "1.0.0" },
   {
@@ -36,7 +43,7 @@ const server = new Server<never, ChannelNotification>(
       experimental: { "claude/channel": {} },
       tools: {},
     },
-    instructions: `You are connected to cc-dm. Your session id is "${SESSION_ID}". Your session is already registered as "${SESSION_NAME}" with role "${SESSION_ROLE}". Do NOT call register on startup — it is handled automatically. Only call register if the user explicitly asks to change the session name or role. Messages from other sessions arrive as <channel source="cc-dm" from_session="..." to_session="...">. Act on messages addressed to your session name or to_session="all". Available tools: register, dm, who, broadcast.`,
+    instructions: `You are connected to cc-dm. Your session id is "${SESSION_ID}". ${registrationInstruction} Messages from other sessions arrive as <channel source="cc-dm" from_session="..." to_session="...">. Act on messages addressed to your session name or to_session="all". Available tools: register, dm, who, broadcast.`,
   }
 );
 

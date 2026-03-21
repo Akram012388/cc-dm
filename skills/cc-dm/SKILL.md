@@ -11,10 +11,13 @@ copy-pasting context manually.
 
 ## On startup
 
-Your session is automatically registered at startup using environment
-variables (CC_DM_SESSION_NAME, CC_DM_SESSION_ROLE). Do NOT call register
-on startup — it would overwrite the configured values. Only call register
-if the user explicitly asks to change the session name or role.
+Session registration is handled automatically from environment variables
+(CC_DM_SESSION_NAME, CC_DM_SESSION_ROLE). Check the MCP instructions to
+see if name and role are already configured:
+
+- **Both configured:** Do nothing. Registration is complete.
+- **Either missing:** Invoke the /cc-dm:register skill on first interaction
+  to ask the user for the missing value(s). Never guess or self-assign.
 
 ## Sending a direct message
 
