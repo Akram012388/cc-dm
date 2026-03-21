@@ -1,99 +1,76 @@
 # CLAUDE.md
 
-cc-dm is a Claude Code Channel plugin that enables direct peer-to-peer messaging between active Claude Code CLI sessions on the same machine via a shared SQLite bus.
+cc-dm is a Claude Code Channel plugin that enables direct peer-to-peer messaging between active Claude Code sessions on the same machine via a shared SQLite bus.
 
 ## Stack
 
-- **Runtime:** Bun (never use `node` to run anything in this project)
+- **Runtime:** Bun — never use `node` to run anything in this project
 - **Language:** TypeScript, strict mode
 - **MCP SDK:** `@modelcontextprotocol/sdk`
-- **Database:** `bun:sqlite` (built-in, zero external dependencies)
-- **Protocol:** Claude Code Channels (research preview) — [reference doc](https://code.claude.com/docs/en/channels-reference)
+- **Database:** `bun:sqlite` (built-in, zero external deps)
+- **Channel protocol ref:** https://code.claude.com/docs/en/channels-reference
 
-## Project structure
+## Architecture
 
 ```
-src/server.ts          MCP server entry point, declares claude/channel capability
-src/bus.ts             SQLite WAL layer, sessions and messages tables
-src/tools.ts           Tool handlers: dm, who, register, broadcast
-src/heartbeat.ts       30s pulse writer, 60s session expiry cleanup
-plugin.json            Plugin manifest
-.mcp.json              MCP server config for Claude Code
-skills/cc-dm/SKILL.md  Skill that teaches Claude how to use cc-dm naturally
-install.sh             curl | bash installer
-README.md
-CLAUDE.md
+src/bus.ts              SQLite WAL bus, sessions + messages tables
+src/tools.ts            Four tool handlers: dm, who, register, broadcast
+src/heartbeat.ts        30s heartbeat writer, 60s expiry cleanup
+src/server.ts           MCP entry point, claude/channel capability, poll loop
+skills/cc-dm/SKILL.md   Skill for natural language usage
+plugin.json             Plugin manifest
+.mcp.json               MCP server config
+install.sh              curl | bash installer
 ```
 
-## Channel contract
+## Key implementation details
 
-This must be followed exactly.
-
-The server must declare the channel capability:
+Channel capability declared via:
 
 ```ts
 capabilities.experimental['claude/channel']: {}
 ```
 
-Push events into the target session's context via:
+SDK notification type extended via `Server<never, ChannelNotification>` generic to support the custom `notifications/claude/channel` method.
 
-```ts
-mcp.notification({
-  method: 'notifications/claude/channel',
-  params: { content, meta }
-})
-```
+Poll loop: `setInterval` at 500ms with async inner callback, awaits each `server.notification()` call individually.
 
-`meta` fields become attributes on the `<channel>` tag that Claude sees in context.
+Broadcast writes one row per recipient with their specific session ID as `to_session`. Do not use `to_session='all'` — this causes a delivered-flag race condition across concurrent poll loops where whichever session polls first marks the message delivered, preventing other sessions from seeing it.
 
-Transport is stdio only. Claude Code spawns the server as a subprocess — no ports, no HTTP.
+All logging via `console.error` — stdout is reserved for MCP stdio protocol.
 
-The `instructions` field in the `Server` constructor is injected into Claude's system prompt. Keep it clear, actionable, and under 100 words.
+Session identity: `CC_DM_SESSION_ID` env var, falls back to `session-<random hex>`.
 
-## SQLite rules
-
-Bus file: `~/.cc-dm/bus.db`
-
-Always set on connection:
-
-```sql
-PRAGMA journal_mode=WAL;
-PRAGMA synchronous=NORMAL;
-```
-
-Two tables only: `sessions` and `messages`. No others.
-
-Poll interval: 500ms per session instance.
+Bus path: `~/.cc-dm/bus.db`
 
 ## Do's
 
-- Use `bun:sqlite` for all database access
-- Use `@modelcontextprotocol/sdk` `Server` and `StdioServerTransport`
-- Keep tool count at 4 maximum: `dm`, `who`, `register`, `broadcast`
-- Write TypeScript with strict mode enabled
-- Handle SQLite errors gracefully — bus corruption must not crash the server
-- Ensure the poll loop does not block the stdio transport
+- Use `bun:sqlite` for all database access — raw SQL only, no ORM
+- Use `console.error` for all logging
+- Keep tool count at 4: `dm`, `who`, `register`, `broadcast`
+- Wrap all DB calls and notification sends in try/catch
+- Use `.js` extensions on local imports (ESNext module resolution)
 
 ## Don'ts
 
-- Do not use Node.js APIs — this is a Bun project
-- Do not use any ORM or query builder — raw SQL only
+- Do not use Node.js APIs — Bun project only
 - Do not add external dependencies beyond `@modelcontextprotocol/sdk`
-- Do not expose any network port — stdio only, local machine only
-- Do not implement pairing codes or allowlists — all local sessions are trusted by default
-- Do not use HTTP transport — stdio only
-- Do not bloat the `instructions` string passed to Claude — keep it under 100 words
+- Do not expose any network port — stdio only
+- Do not use `console.log` anywhere in `src/`
+- Do not revert broadcast to `to_session='all'` — the race condition is real
+- Do not hardcode `CC_DM_SESSION_ID` in `.mcp.json`
 
 ## Testing
 
-Test with:
-
 ```bash
-claude --dangerously-load-development-channels server:cc-dm
+bun run typecheck          # must pass before any commit
+bun run src/bus.ts         # bus smoke test
+bun run src/tools.ts       # tools smoke test
+bun run src/heartbeat.ts   # heartbeat smoke test
 ```
 
-Open 2+ terminal sessions to verify message delivery end-to-end. Use `fakechat` as reference for channel behavior if needed.
+Live e2e test: open two terminals with different `CC_DM_SESSION_ID` values and verify message delivery end-to-end.
 
 ---
 
-**Note:** Channels is a research preview feature. The notification protocol contract may change. If something breaks, check the [channels reference](https://code.claude.com/docs/en/channels-reference) first before debugging the code.
+**Note:** The `--dangerously-load-development-channels` flag is required for local development. If the notification contract changes, check the [channels reference](https://code.claude.com/docs/en/channels-reference) first before debugging the code.
