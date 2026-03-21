@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO="https://github.com/Akram012388/cc-dm"
 INSTALL_DIR="$HOME/.cc-dm/plugin"
-CONFIG_FILE="$HOME/.claude.json"
+CONFIG_FILE="$HOME/.claude/settings.json"
 
 echo ""
 echo "cc-dm — Claude Code Direct Message"
@@ -54,29 +54,22 @@ fi
 echo "Installing dependencies..."
 bun install --cwd "$INSTALL_DIR" --quiet
 
-# Inject MCP server config into ~/.claude.json
+# Inject MCP server config into ~/.claude/settings.json
 echo "Configuring Claude Code..."
 
-MCP_ENTRY=$(cat <<EOF
-{
-  "command": "bun",
-  "args": ["run", "$INSTALL_DIR/src/server.ts"]
-}
-EOF
-)
+mkdir -p "$HOME/.claude"
 
-if [ ! -f "$CONFIG_FILE" ]; then
-  echo '{}' > "$CONFIG_FILE"
-fi
-
-# Use bun to safely merge the config
 bun -e "
-const fs = require('fs');
-const config = JSON.parse(fs.readFileSync('$CONFIG_FILE', 'utf8'));
-if (!config.mcpServers) config.mcpServers = {};
-config.mcpServers['cc-dm'] = $MCP_ENTRY;
-fs.writeFileSync('$CONFIG_FILE', JSON.stringify(config, null, 2));
-console.log('MCP server registered in ~/.claude.json');
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+const path = '$CONFIG_FILE';
+const existing = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {};
+if (!existing.mcpServers) existing.mcpServers = {};
+existing.mcpServers['cc-dm'] = {
+  command: 'bun',
+  args: ['run', '$INSTALL_DIR/src/server.ts']
+};
+writeFileSync(path, JSON.stringify(existing, null, 2));
+console.log('MCP server registered in $CONFIG_FILE');
 "
 
 echo ""

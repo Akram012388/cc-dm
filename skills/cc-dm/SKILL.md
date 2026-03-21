@@ -1,16 +1,6 @@
 ---
 name: cc-dm
-description: Use cc-dm to send and receive direct messages between active Claude Code sessions on this machine
-triggers:
-  - "dm"
-  - "direct message"
-  - "message the"
-  - "tell the"
-  - "notify"
-  - "broadcast"
-  - "who is active"
-  - "who is online"
-  - "cc-dm"
+description: Send and receive direct messages between active Claude Code sessions on this machine. Use when the user asks to dm, message, notify, broadcast, or check who is active across sessions.
 ---
 
 # cc-dm — Claude Code Direct Message

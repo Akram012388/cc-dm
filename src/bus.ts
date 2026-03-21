@@ -42,6 +42,11 @@ export function initBus(): void {
         created_at    TEXT NOT NULL
       );
     `);
+
+    db.run(`
+      CREATE INDEX IF NOT EXISTS idx_messages_to_delivered
+      ON messages(to_session, delivered);
+    `);
   } catch (err) {
     console.error("[cc-dm/bus] initBus failed:", err);
   }
@@ -51,8 +56,12 @@ export function registerSession(sessionId: string, role: string): void {
   try {
     const now = new Date().toISOString();
     db.run(
-      `INSERT OR REPLACE INTO sessions (id, role, status, last_seen, registered_at)
-       VALUES (?, ?, 'active', ?, ?)`,
+      `INSERT INTO sessions (id, role, status, last_seen, registered_at)
+       VALUES (?, ?, 'active', ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         role = excluded.role,
+         status = 'active',
+         last_seen = excluded.last_seen`,
       [sessionId, role, now, now]
     );
   } catch (err) {
@@ -79,6 +88,10 @@ export function expireStaleSessions(): void {
       `UPDATE sessions SET status = 'inactive' WHERE last_seen < ?`,
       [cutoff]
     );
+    db.run(
+      `DELETE FROM messages WHERE delivered = 1 AND created_at < ?`,
+      [new Date(Date.now() - 3_600_000).toISOString()]
+    );
   } catch (err) {
     console.error("[cc-dm/bus] expireStaleSessions failed:", err);
   }
@@ -99,18 +112,24 @@ export function writeMessage(fromSession: string, toSession: string, content: st
 
 export function readMessages(sessionId: string): Array<{ id: number; from_session: string; content: string; created_at: string }> {
   try {
-    const rows = db.query<{ id: number; from_session: string; content: string; created_at: string }, [string]>(
-      `SELECT id, from_session, content, created_at FROM messages
-       WHERE (to_session = ? OR to_session = 'all') AND delivered = 0
-       ORDER BY created_at ASC`
-    ).all(sessionId);
+    const readAndDeliver = db.transaction((sid: string) => {
+      const messages = db.query<{ id: number; from_session: string; content: string; created_at: string }, [string]>(
+        `SELECT id, from_session, content, created_at FROM messages
+         WHERE (to_session = ? OR to_session = 'all') AND delivered = 0
+         ORDER BY created_at ASC`
+      ).all(sid);
 
-    if (rows.length > 0) {
-      const ids = rows.map((r) => r.id).join(",");
-      db.run(`UPDATE messages SET delivered = 1 WHERE id IN (${ids})`);
-    }
+      if (messages.length === 0) return [];
 
-    return rows;
+      const stmt = db.prepare(`UPDATE messages SET delivered = 1 WHERE id = ?`);
+      for (const msg of messages) {
+        stmt.run(msg.id);
+      }
+
+      return messages;
+    });
+
+    return readAndDeliver(sessionId);
   } catch (err) {
     console.error("[cc-dm/bus] readMessages failed:", err);
     return [];
