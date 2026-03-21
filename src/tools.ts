@@ -5,7 +5,6 @@ import { writeMessage, readMessages, listActiveSessions, registerSession } from 
 export type DmResult = {
   success: boolean;
   to: string;
-  messageId?: number;
   error?: string;
 };
 

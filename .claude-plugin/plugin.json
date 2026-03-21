@@ -1,18 +1,12 @@
 {
   "name": "cc-dm",
-  "version": "0.1.0",
-  "description": "Peer-to-peer direct messaging between Claude Code sessions via the Channels protocol",
-  "author": { "name": "Shaikh Akram Ahmed" },
-  "license": "MIT",
-  "repository": "https://github.com/Akram012388/cc-dm",
-  "keywords": ["claude-code", "mcp", "channels", "multi-agent", "sessions"],
-  "mcpServers": {
-    "cc-dm": {
-      "command": "bun",
-      "args": ["run", "${CLAUDE_PLUGIN_ROOT}/src/server.ts"]
-    }
+  "description": "Peer-to-peer direct messaging between Claude Code sessions via the Channels protocol. Enables multi-session coordination through a shared SQLite message bus.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Shaikh Akram Ahmed"
   },
-  "skills": [
-    "skills/cc-dm"
-  ]
+  "homepage": "https://github.com/Akram012388/cc-dm",
+  "repository": "https://github.com/Akram012388/cc-dm",
+  "license": "MIT",
+  "keywords": ["messaging", "channels", "multi-session", "coordination", "sqlite", "mcp"]
 }
