@@ -84,7 +84,7 @@ Built on Claude Code Channels (research preview, v2.1.80+). The `--dangerously-l
 
 ## Built by
 
-Akram Al-Balushi — architect turned builder, Muscat, Oman.
+Shaikh Akram Ahmed — architect turned builder, Muscat, Oman.
 https://github.com/Akram012388
 
 ## License

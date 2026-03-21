@@ -2,7 +2,7 @@
   "name": "cc-dm",
   "version": "0.1.0",
   "description": "Peer-to-peer direct messaging between Claude Code sessions via the Channels protocol",
-  "author": "Akram Al-Balushi",
+  "author": "Shaikh Akram Ahmed",
   "license": "MIT",
   "type": "module",
   "main": "src/server.ts",
