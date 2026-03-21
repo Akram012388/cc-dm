@@ -12,6 +12,7 @@ export type DmResult = {
 export type WhoResult = {
   sessions: Array<{ id: string; role: string; last_seen: string }>;
   count: number;
+  error?: string;
 };
 
 export type RegisterResult = {
@@ -71,8 +72,12 @@ export function handleDm(from: string, to: string, content: string): DmResult {
       return { success: false, to: "", error: "content must be under 10000 chars" };
     }
 
-    writeMessage(from, to, content);
-    return { success: true, to };
+    const cleanTo = sanitize(to);
+    const ok = writeMessage(from, cleanTo, content);
+    if (!ok) {
+      return { success: false, to: cleanTo, error: "failed to write message" };
+    }
+    return { success: true, to: cleanTo };
   } catch (err) {
     return { success: false, to: "", error: String(err) };
   }
@@ -82,8 +87,9 @@ export function handleWho(): WhoResult {
   try {
     const sessions = listActiveSessions();
     return { sessions, count: sessions.length };
-  } catch {
-    return { sessions: [], count: 0 };
+  } catch (err) {
+    console.error("[cc-dm/tools] handleWho failed:", err);
+    return { sessions: [], count: 0, error: String(err) };
   }
 }
 
@@ -101,11 +107,17 @@ export function handleBroadcast(from: string, content: string): BroadcastResult 
 
     const sessions = listActiveSessions();
     const recipients = sessions.filter((s) => s.id !== from);
+    let failures = 0;
 
     for (const session of recipients) {
-      writeMessage(from, session.id, content);
+      if (!writeMessage(from, session.id, content)) {
+        failures++;
+      }
     }
 
+    if (failures > 0) {
+      return { success: false, from, recipientCount: recipients.length - failures, error: `failed to deliver to ${failures} recipient(s)` };
+    }
     return { success: true, from, recipientCount: recipients.length };
   } catch (err) {
     return { success: false, from: "", recipientCount: 0, error: String(err) };
