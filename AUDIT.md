@@ -34,7 +34,7 @@ Audited against:
 
 2. **Prune delivered messages periodically** — The messages table grows indefinitely. Old delivered messages serve no purpose. Consider adding a cleanup step in `expireStaleSessions()` that deletes messages older than e.g. 1 hour with `delivered = 1`.
 
-3. **Use `${CLAUDE_PLUGIN_ROOT}` in MCP server paths** — The plugins reference documents `${CLAUDE_PLUGIN_ROOT}` as the standard way to reference plugin files. The `.mcp.json` and `plugin.json` should use `"args": ["run", "${CLAUDE_PLUGIN_ROOT}/src/server.ts"]` so paths resolve correctly after plugin installation to the cache directory.
+3. ~~**Use `${CLAUDE_PLUGIN_ROOT}` in MCP server paths**~~ — **RESOLVED in 36b2af9.** The `.mcp.json` now uses `"args": ["run", "--cwd", "${CLAUDE_PLUGIN_ROOT}", "--silent", "start"]` which sets the working directory to the plugin root and invokes the `start` script from `package.json`, matching the pattern used by official plugins (e.g. telegram).
 
 4. **Consider `server.sendNotification` for related-message context** — The SDK exposes both `notification()` and `sendNotification()`. The latter associates the notification with the current request being handled, which could be useful if Claude Code tracks message provenance. For standalone push events (not in response to a request), `notification()` is correct.
 
