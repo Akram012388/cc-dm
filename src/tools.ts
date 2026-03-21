@@ -12,6 +12,7 @@ export type DmResult = {
 export type WhoResult = {
   sessions: Array<{ id: string; role: string; last_seen: string }>;
   count: number;
+  error?: string;
 };
 
 export type RegisterResult = {
@@ -88,7 +89,7 @@ export function handleWho(): WhoResult {
     return { sessions, count: sessions.length };
   } catch (err) {
     console.error("[cc-dm/tools] handleWho failed:", err);
-    return { sessions: [], count: 0 };
+    return { sessions: [], count: 0, error: String(err) };
   }
 }
 

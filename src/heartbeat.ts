@@ -4,8 +4,6 @@ import { updateHeartbeat, expireStaleSessions } from "./bus.js";
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let cleanupTimer: ReturnType<typeof setInterval> | null = null;
-let exitHandlersRegistered = false;
-
 export function startHeartbeat(sessionId: string): void {
   if (!sessionId || sessionId.trim().length === 0) {
     console.error("[cc-dm/heartbeat] sessionId is required");
@@ -44,12 +42,7 @@ export function startHeartbeat(sessionId: string): void {
     }
   }, 60_000);
 
-  if (!exitHandlersRegistered) {
-    process.on("exit", () => stopHeartbeat());
-    process.on("SIGINT", () => { stopHeartbeat(); process.exit(0); });
-    process.on("SIGTERM", () => { stopHeartbeat(); process.exit(0); });
-    exitHandlersRegistered = true;
-  }
+  process.on("exit", () => stopHeartbeat());
 }
 
 export function stopHeartbeat(): void {

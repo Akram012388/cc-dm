@@ -175,6 +175,12 @@ export function stopPollLoop(): void {
   }
 }
 
+function shutdown(): void {
+  stopPollLoop();
+  stopHeartbeat();
+  process.exit(0);
+}
+
 async function main(): Promise<void> {
   initBus();
   handleRegister(SESSION_ID, SESSION_ROLE);
@@ -187,8 +193,8 @@ async function main(): Promise<void> {
     startPollLoop();
   }, 1000);
 
-  process.on("SIGINT", () => { stopPollLoop(); stopHeartbeat(); process.exit(0); });
-  process.on("SIGTERM", () => { stopPollLoop(); stopHeartbeat(); process.exit(0); });
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 
   console.error(`cc-dm session "${SESSION_ID}" (${SESSION_ROLE}) started`);
   console.error(`Bus: ~/.cc-dm/bus.db`);
