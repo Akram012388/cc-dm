@@ -1,0 +1,12 @@
+{
+  "name": "cc-dm",
+  "version": "0.1.0",
+  "description": "Peer-to-peer direct messaging between Claude Code sessions",
+  "author": "Akram Al-Balushi",
+  "mcpServers": {
+    "cc-dm": {
+      "command": "bun",
+      "args": ["run", "src/server.ts"]
+    }
+  }
+}

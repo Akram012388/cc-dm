@@ -1,0 +1,21 @@
+{
+  "name": "cc-dm",
+  "version": "0.1.0",
+  "description": "Peer-to-peer direct messaging between Claude Code sessions via the Channels protocol",
+  "author": "Akram Al-Balushi",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/server.ts",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "dev": "bun --watch src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "latest"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "typescript": "latest"
+  }
+}
