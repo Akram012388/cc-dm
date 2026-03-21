@@ -2,7 +2,7 @@
   "mcpServers": {
     "cc-dm": {
       "command": "bun",
-      "args": ["run", "src/server.ts"]
+      "args": ["run", "${CLAUDE_PLUGIN_ROOT}/src/server.ts"]
     }
   }
 }

@@ -1,49 +1,31 @@
 # cc-dm
 
-Direct peer-to-peer messaging between active Claude Code CLI sessions.
+Peer-to-peer direct messaging between Claude Code sessions.
 
 ## What it does
 
-If you run multiple Claude Code sessions in parallel — a planner, a backend worker, a frontend worker, a reviewer — you already know the pain. Context lives in one session but is needed in another. The workaround is copy-paste: pull text from one terminal, paste it into another, lose formatting, lose thread, lose flow.
+Running multiple Claude Code sessions in parallel — a planner, a backend worker, a test runner — means context constantly needs to move between terminals. The default workflow is copy-paste: pull text from one session, switch windows, paste into another, lose formatting, lose thread.
 
-cc-dm eliminates this. It lets any Claude Code session send a direct message to any other session on the same machine. Messages are delivered as native `<channel>` events through Anthropic's Claude Code Channels protocol, which means they land directly in the receiving session's context window — no clipboard, no manual relay, no context loss.
+cc-dm lets any session DM any other session on the same machine. Messages are delivered as native `<channel>` events within 500ms via the Claude Code Channels protocol, landing directly in the receiving session's context window.
 
 ## How it works
 
 ```
- ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
- │  Session A   │   │  Session B   │   │  Session C   │
- │  "planner"   │   │  "backend"   │   │  "frontend"  │
- └──────┬───────┘   └──────┬───────┘   └──────┬───────┘
-        │                  │                   │
-        │    stdio         │    stdio          │    stdio
-        │                  │                   │
- ┌──────▼───────┐   ┌──────▼───────┐   ┌──────▼───────┐
- │  cc-dm       │   │  cc-dm       │   │  cc-dm       │
- │  channel     │   │  channel     │   │  channel     │
- │  server      │   │  server      │   │  server      │
- └──────┬───────┘   └──────┬───────┘   └──────┬───────┘
-        │                  │                   │
-        └──────────────────┼───────────────────┘
-                           │
-                    ┌──────▼───────┐
-                    │              │
-                    │   bus.db     │
-                    │              │
-                    │ ~/.cc-dm/    │
-                    └──────────────┘
+  Session A (planner)  ──┐
+  Session B (backend)  ──┼──→  ~/.cc-dm/bus.db  (SQLite WAL)
+  Session C (tests)    ──┘          ↑
+                               500ms poll per session
+                               → <channel> event pushed into context
 ```
 
-Each Claude Code session launches a cc-dm channel server as a subprocess via stdio. The channel server connects to a shared SQLite database at `~/.cc-dm/bus.db`. When a session sends a message, it writes a row to the bus. Every other session's channel server polls the bus every 500ms, picks up new messages addressed to it, and pushes them into its parent session as `<channel>` events. The receiving Claude sees the message appear in context as if it arrived from any other channel source.
-
-No daemon. No port allocation. No network stack. Just a shared file and a poll loop.
+Each session spawns a cc-dm channel server via stdio. The server connects to a shared SQLite database at `~/.cc-dm/bus.db`. When a session sends a message, it writes a row to the bus. Every other session's server polls the bus every 500ms, picks up messages addressed to it, and pushes them as `<channel>` events into its parent session. No daemon, no ports, no network. Just a shared file and a poll loop.
 
 ## Requirements
 
-- **Claude Code** v2.1.80 or later (Channels protocol support)
+- **Claude Code** v2.1.80 or later
 - **claude.ai login** — Channels requires cloud authentication, not API key auth
-- **Bun** runtime
-- **macOS** — primary supported platform; Linux is untested but may work
+- **Bun** runtime ([bun.sh](https://bun.sh))
+- **macOS** — primary supported platform
 
 ## Install
 
@@ -53,45 +35,57 @@ curl -fsSL https://raw.githubusercontent.com/Akram012388/cc-dm/main/install.sh |
 
 ## Usage
 
-### Start a session with cc-dm
+Start a session with cc-dm:
 
 ```bash
+CC_DM_SESSION_ID=planner CC_DM_SESSION_ROLE=orchestrator \
 claude --dangerously-load-development-channels server:cc-dm
 ```
 
-### Register a session name
+Once inside, use natural language:
 
-Once inside a session, tell Claude naturally:
+> "Register this session as planner"
 
-> "Register this session as 'planner' in cc-dm."
+> "DM the backend session: auth spec is ready"
 
-### Send a direct message
+> "Who is active in cc-dm?"
 
-> "DM the backend session: the auth spec is ready, you can start implementation."
+> "Broadcast to all sessions: wrapping up in 10"
 
-### Broadcast to all sessions
+## Session identity
 
-> "Broadcast to all sessions: standup in 5 minutes."
+Set these environment variables before launching:
 
-### Check who's online
+- `CC_DM_SESSION_ID` — your session name (e.g. `planner`, `backend`, `tests`)
+- `CC_DM_SESSION_ROLE` — your role (e.g. `orchestrator`, `worker`, `reviewer`)
 
-> "Who's active in cc-dm?"
-
-## Session lifecycle
-
-Sessions register themselves with the bus on startup, claiming a human-readable name. Each session sends a heartbeat every 30 seconds to signal that it is still alive. If a session goes 60 seconds without a heartbeat — because the terminal was closed, the process was killed, or the machine went to sleep — it is automatically marked as expired and removed from the active roster. There is no manual cleanup. Start sessions, use them, close them. The bus takes care of the rest.
+If not set, the session ID defaults to `session-<random hex>` and the role defaults to `worker`. Sessions send a heartbeat every 30 seconds. A session with no heartbeat for 60 seconds is automatically marked inactive and removed from the roster. No manual cleanup needed.
 
 ## Remote access
 
-Any cc-dm session can be accessed remotely from the Claude iOS app using the `/remote-control` command. Run `/remote-control` inside a session to make it available as a remote control target. Session names registered in cc-dm map one-to-one to remote control targets, so you can address sessions by name from your phone.
+Use `/remote-control` in any session to access it from the Claude iOS app. cc-dm session names map directly to remote control targets. Run multiple sessions locally, drop into any one from your phone.
+
+## Bus inspection
+
+Inspect the SQLite bus directly at any time:
+
+```bash
+bun -e "
+  import { Database } from 'bun:sqlite';
+  const db = new Database(process.env.HOME + '/.cc-dm/bus.db');
+  console.log(db.query('SELECT * FROM sessions').all());
+  console.log(db.query('SELECT * FROM messages').all());
+"
+```
 
 ## Development status
 
-cc-dm is a research preview. It is built on Claude Code Channels, which is itself a research preview introduced in Claude Code v2.1.80. The Channels protocol may change, and cc-dm will change with it. Expect breaking changes. Pin versions if stability matters to you.
+Built on Claude Code Channels (research preview, v2.1.80+). The `--dangerously-load-development-channels` flag is required until cc-dm is submitted to and approved by the official Channels marketplace. Breaking changes possible as the Channels protocol matures toward GA. Track: https://code.claude.com/docs/en/channels-reference
 
 ## Built by
 
 Akram Al-Balushi — architect turned builder, Muscat, Oman.
+https://github.com/Akram012388
 
 ## License
 

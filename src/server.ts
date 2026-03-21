@@ -16,6 +16,8 @@ const SESSION_ID =
 
 const SESSION_ROLE = process.env.CC_DM_SESSION_ROLE?.trim() || "worker";
 
+let activeSessionId = SESSION_ID;
+
 type ChannelNotification = {
   method: "notifications/claude/channel";
   params: {
@@ -106,11 +108,16 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         req.params.arguments?.session_id as string,
         req.params.arguments?.role as string
       );
+      if (result.success && result.sessionId !== activeSessionId) {
+        activeSessionId = result.sessionId;
+        startHeartbeat(activeSessionId);
+        console.error(`cc-dm session identity updated to "${activeSessionId}"`);
+      }
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     }
     case "dm": {
       const result = handleDm(
-        SESSION_ID,
+        activeSessionId,
         req.params.arguments?.to as string,
         req.params.arguments?.content as string
       );
@@ -122,7 +129,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     }
     case "broadcast": {
       const result = handleBroadcast(
-        SESSION_ID,
+        activeSessionId,
         req.params.arguments?.content as string
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
@@ -132,10 +139,11 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   }
 });
 
-function startPollLoop(sessionId: string): void {
+// Using notification() — sendNotification() not available in installed SDK version
+function startPollLoop(): void {
   setInterval(async () => {
     try {
-      const messages = readMessages(sessionId);
+      const messages = readMessages(activeSessionId);
       if (messages.length === 0) return;
 
       for (const message of messages) {
@@ -145,7 +153,7 @@ function startPollLoop(sessionId: string): void {
             content: message.content,
             meta: {
               from_session: message.from_session,
-              to_session: sessionId,
+              to_session: activeSessionId,
               message_id: String(message.id),
               sent_at: message.created_at,
             },
@@ -166,7 +174,9 @@ async function main(): Promise<void> {
   await server.connect(transport);
 
   startHeartbeat(SESSION_ID);
-  startPollLoop(SESSION_ID);
+  setTimeout(() => {
+    startPollLoop();
+  }, 1000);
 
   console.error(`cc-dm session "${SESSION_ID}" (${SESSION_ROLE}) started`);
   console.error(`Bus: ~/.cc-dm/bus.db`);
