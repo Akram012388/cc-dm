@@ -96,6 +96,16 @@ bun -e "
 "
 ```
 
+## Releases
+
+| Version | Date | Highlights |
+|---------|------|------------|
+| [v0.3.0](https://github.com/Akram012388/cc-dm/releases/tag/v0.3.0) | 2026-03-22 | Fix MCP server path resolution for plugin marketplace installs |
+| [v0.2.0](https://github.com/Akram012388/cc-dm/releases/tag/v0.2.0) | 2026-03-21 | 44-test suite, clean shutdown, bus hardening |
+| [v0.1.0](https://github.com/Akram012388/cc-dm/releases/tag/v0.1.0) | 2026-03-21 | Initial release |
+
+See [CHANGELOG.md](CHANGELOG.md) for full details.
+
 ## Development status
 
 Built on Claude Code Channels (research preview, v2.1.80+). The `--dangerously-load-development-channels` flag is required until cc-dm is submitted to and approved by the official Channels marketplace. Breaking changes possible as the Channels protocol matures toward GA. Track: https://code.claude.com/docs/en/channels-reference

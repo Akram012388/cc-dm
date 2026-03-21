@@ -6,11 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-22
+
 ### Added
 - Interactive `/cc-dm:register` skill for session registration
 - Plugin manifest updated for official Anthropic marketplace submission
 - MIT LICENSE file added
 - CHANGELOG.md added
+
+### Fixed
+- MCP server failed to start when installed as a plugin — `.mcp.json` used a relative path (`src/server.ts`) instead of `--cwd ${CLAUDE_PLUGIN_ROOT}` with the `start` script, causing bun to resolve from the user's working directory instead of the plugin root
 
 ### Changed
 - Version bumped to 1.0.0 (pending release)
