@@ -9,7 +9,8 @@
   "scripts": {
     "start": "bun run src/server.ts",
     "dev": "bun --watch src/server.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "latest"
