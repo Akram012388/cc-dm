@@ -1,31 +1,142 @@
 // SQLite WAL message bus. Shared across all cc-dm session instances via ~/.cc-dm/bus.db
 
+import { Database } from "bun:sqlite";
+import { homedir } from "node:os";
+import { mkdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
+
+const BUS_DIR = join(homedir(), ".cc-dm");
+const BUS_PATH = join(BUS_DIR, "bus.db");
+
+let db: Database;
+
 export function initBus(): void {
-  // TODO: Create ~/.cc-dm/bus.db, set WAL mode, create sessions and messages tables
+  try {
+    if (!existsSync(BUS_DIR)) {
+      mkdirSync(BUS_DIR, { recursive: true });
+    }
+
+    db = new Database(BUS_PATH, { create: true });
+
+    db.run("PRAGMA journal_mode=WAL;");
+    db.run("PRAGMA synchronous=NORMAL;");
+    db.run("PRAGMA foreign_keys=ON;");
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id            TEXT PRIMARY KEY,
+        role          TEXT NOT NULL DEFAULT 'worker',
+        status        TEXT NOT NULL DEFAULT 'active',
+        last_seen     TEXT NOT NULL,
+        registered_at TEXT NOT NULL
+      );
+    `);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        from_session  TEXT NOT NULL,
+        to_session    TEXT NOT NULL,
+        content       TEXT NOT NULL,
+        delivered     INTEGER NOT NULL DEFAULT 0,
+        created_at    TEXT NOT NULL
+      );
+    `);
+  } catch (err) {
+    console.error("[cc-dm/bus] initBus failed:", err);
+  }
 }
 
 export function registerSession(sessionId: string, role: string): void {
-  // TODO: Insert or update session in sessions table
+  try {
+    const now = new Date().toISOString();
+    db.run(
+      `INSERT OR REPLACE INTO sessions (id, role, status, last_seen, registered_at)
+       VALUES (?, ?, 'active', ?, ?)`,
+      [sessionId, role, now, now]
+    );
+  } catch (err) {
+    console.error("[cc-dm/bus] registerSession failed:", err);
+  }
 }
 
 export function updateHeartbeat(sessionId: string): void {
-  // TODO: Update last_seen timestamp for session
+  try {
+    const now = new Date().toISOString();
+    db.run(
+      `UPDATE sessions SET last_seen = ?, status = 'active' WHERE id = ?`,
+      [now, sessionId]
+    );
+  } catch (err) {
+    console.error("[cc-dm/bus] updateHeartbeat failed:", err);
+  }
 }
 
 export function expireStaleSessions(): void {
-  // TODO: Delete sessions with last_seen older than 60s
+  try {
+    const cutoff = new Date(Date.now() - 60_000).toISOString();
+    db.run(
+      `UPDATE sessions SET status = 'inactive' WHERE last_seen < ?`,
+      [cutoff]
+    );
+  } catch (err) {
+    console.error("[cc-dm/bus] expireStaleSessions failed:", err);
+  }
 }
 
 export function writeMessage(fromSession: string, toSession: string, content: string): void {
-  // TODO: Insert message row into messages table
+  try {
+    const now = new Date().toISOString();
+    db.run(
+      `INSERT INTO messages (from_session, to_session, content, delivered, created_at)
+       VALUES (?, ?, ?, 0, ?)`,
+      [fromSession, toSession, content, now]
+    );
+  } catch (err) {
+    console.error("[cc-dm/bus] writeMessage failed:", err);
+  }
 }
 
-export function readMessages(sessionId: string): any[] {
-  // TODO: Read and delete pending messages for session
-  return [];
+export function readMessages(sessionId: string): Array<{ id: number; from_session: string; content: string; created_at: string }> {
+  try {
+    const rows = db.query<{ id: number; from_session: string; content: string; created_at: string }, [string]>(
+      `SELECT id, from_session, content, created_at FROM messages
+       WHERE (to_session = ? OR to_session = 'all') AND delivered = 0
+       ORDER BY created_at ASC`
+    ).all(sessionId);
+
+    if (rows.length > 0) {
+      const ids = rows.map((r) => r.id).join(",");
+      db.run(`UPDATE messages SET delivered = 1 WHERE id IN (${ids})`);
+    }
+
+    return rows;
+  } catch (err) {
+    console.error("[cc-dm/bus] readMessages failed:", err);
+    return [];
+  }
 }
 
-export function listActiveSessions(): any[] {
-  // TODO: Return all sessions with last_seen within 60s
-  return [];
+export function listActiveSessions(): Array<{ id: string; role: string; last_seen: string }> {
+  try {
+    return db.query<{ id: string; role: string; last_seen: string }, []>(
+      `SELECT id, role, last_seen FROM sessions
+       WHERE status = 'active'
+       ORDER BY registered_at ASC`
+    ).all();
+  } catch (err) {
+    console.error("[cc-dm/bus] listActiveSessions failed:", err);
+    return [];
+  }
+}
+
+// Smoke test — only runs when executed directly: bun run src/bus.ts
+if (import.meta.main) {
+  initBus();
+  registerSession("test-session", "worker");
+  writeMessage("test-session", "test-session", "hello from smoke test");
+  const msgs = readMessages("test-session");
+  console.log("messages:", msgs);
+  const sessions = listActiveSessions();
+  console.log("sessions:", sessions);
 }
