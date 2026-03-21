@@ -3,20 +3,23 @@
 import { Database } from "bun:sqlite";
 import { homedir } from "node:os";
 import { mkdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 
 const BUS_DIR = join(homedir(), ".cc-dm");
 const BUS_PATH = join(BUS_DIR, "bus.db");
 
 let db: Database;
 
-export function initBus(): void {
+export function initBus(dbPath?: string): void {
   try {
-    if (!existsSync(BUS_DIR)) {
-      mkdirSync(BUS_DIR, { recursive: true });
+    const resolvedPath = dbPath ?? BUS_PATH;
+    const resolvedDir = dbPath ? dirname(resolvedPath) : BUS_DIR;
+
+    if (!existsSync(resolvedDir)) {
+      mkdirSync(resolvedDir, { recursive: true });
     }
 
-    db = new Database(BUS_PATH, { create: true });
+    db = new Database(resolvedPath, { create: true });
 
     db.run("PRAGMA journal_mode=WAL;");
     db.run("PRAGMA synchronous=NORMAL;");
@@ -50,6 +53,12 @@ export function initBus(): void {
   } catch (err) {
     console.error("[cc-dm/bus] initBus failed:", err);
     throw err;
+  }
+}
+
+export function closeBus(): void {
+  if (db) {
+    db.close();
   }
 }
 
