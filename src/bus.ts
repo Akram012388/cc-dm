@@ -49,6 +49,7 @@ export function initBus(): void {
     `);
   } catch (err) {
     console.error("[cc-dm/bus] initBus failed:", err);
+    throw err;
   }
 }
 
@@ -97,7 +98,7 @@ export function expireStaleSessions(): void {
   }
 }
 
-export function writeMessage(fromSession: string, toSession: string, content: string): void {
+export function writeMessage(fromSession: string, toSession: string, content: string): boolean {
   try {
     const now = new Date().toISOString();
     db.run(
@@ -105,8 +106,10 @@ export function writeMessage(fromSession: string, toSession: string, content: st
        VALUES (?, ?, ?, 0, ?)`,
       [fromSession, toSession, content, now]
     );
+    return true;
   } catch (err) {
     console.error("[cc-dm/bus] writeMessage failed:", err);
+    return false;
   }
 }
 
@@ -115,8 +118,8 @@ export function readMessages(sessionId: string): Array<{ id: number; from_sessio
     const readAndDeliver = db.transaction((sid: string) => {
       const messages = db.query<{ id: number; from_session: string; content: string; created_at: string }, [string]>(
         `SELECT id, from_session, content, created_at FROM messages
-         WHERE (to_session = ? OR to_session = 'all') AND delivered = 0
-         ORDER BY created_at ASC`
+         WHERE to_session = ? AND delivered = 0
+         ORDER BY id ASC`
       ).all(sid);
 
       if (messages.length === 0) return [];

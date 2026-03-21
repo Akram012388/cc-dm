@@ -46,8 +46,8 @@ export function startHeartbeat(sessionId: string): void {
 
   if (!exitHandlersRegistered) {
     process.on("exit", () => stopHeartbeat());
-    process.on("SIGINT", () => stopHeartbeat());
-    process.on("SIGTERM", () => stopHeartbeat());
+    process.on("SIGINT", () => { stopHeartbeat(); process.exit(0); });
+    process.on("SIGTERM", () => { stopHeartbeat(); process.exit(0); });
     exitHandlersRegistered = true;
   }
 }

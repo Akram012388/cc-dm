@@ -8,7 +8,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { initBus, readMessages } from "./bus.js";
 import { handleDm, handleWho, handleRegister, handleBroadcast } from "./tools.js";
-import { startHeartbeat } from "./heartbeat.js";
+import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 
 const SESSION_ID =
   process.env.CC_DM_SESSION_ID?.trim() ||
@@ -105,8 +105,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   switch (req.params.name) {
     case "register": {
       const result = handleRegister(
-        req.params.arguments?.session_id as string,
-        req.params.arguments?.role as string
+        String(req.params.arguments?.session_id ?? ""),
+        String(req.params.arguments?.role ?? "")
       );
       if (result.success && result.sessionId !== activeSessionId) {
         activeSessionId = result.sessionId;
@@ -118,8 +118,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     case "dm": {
       const result = handleDm(
         activeSessionId,
-        req.params.arguments?.to as string,
-        req.params.arguments?.content as string
+        String(req.params.arguments?.to ?? ""),
+        String(req.params.arguments?.content ?? "")
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     }
@@ -130,7 +130,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     case "broadcast": {
       const result = handleBroadcast(
         activeSessionId,
-        req.params.arguments?.content as string
+        String(req.params.arguments?.content ?? "")
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     }
@@ -139,9 +139,11 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   }
 });
 
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
 // Using notification() — sendNotification() not available in installed SDK version
 function startPollLoop(): void {
-  setInterval(async () => {
+  pollTimer = setInterval(async () => {
     try {
       const messages = readMessages(activeSessionId);
       if (messages.length === 0) return;
@@ -166,6 +168,13 @@ function startPollLoop(): void {
   }, 500);
 }
 
+export function stopPollLoop(): void {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
 async function main(): Promise<void> {
   initBus();
   handleRegister(SESSION_ID, SESSION_ROLE);
@@ -177,6 +186,9 @@ async function main(): Promise<void> {
   setTimeout(() => {
     startPollLoop();
   }, 1000);
+
+  process.on("SIGINT", () => { stopPollLoop(); stopHeartbeat(); process.exit(0); });
+  process.on("SIGTERM", () => { stopPollLoop(); stopHeartbeat(); process.exit(0); });
 
   console.error(`cc-dm session "${SESSION_ID}" (${SESSION_ROLE}) started`);
   console.error(`Bus: ~/.cc-dm/bus.db`);
