@@ -202,8 +202,9 @@ async function main(): Promise<void> {
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+  process.stdin.on("end", shutdown);
 
-  console.error(`cc-dm session "${SESSION_ID}" (${SESSION_ROLE}) started`);
+  console.error(`cc-dm session "${SESSION_NAME}" [${SESSION_ID}] (${SESSION_ROLE}) started`);
   console.error(`Bus: ~/.cc-dm/bus.db`);
   console.error(`Poll: 500ms`);
 }
