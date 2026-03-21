@@ -10,13 +10,16 @@ import { initBus, readPendingMessages, markDelivered, deregisterSession } from "
 import { handleDm, handleWho, handleRegister, handleBroadcast } from "./tools.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 
-const SESSION_ID =
+const SESSION_ID = `session-${Math.random().toString(16).slice(2, 8)}`;
+
+const SESSION_NAME =
+  process.env.CC_DM_SESSION_NAME?.trim() ||
   process.env.CC_DM_SESSION_ID?.trim() ||
-  `session-${Math.random().toString(16).slice(2, 8)}`;
+  SESSION_ID;
 
 const SESSION_ROLE = process.env.CC_DM_SESSION_ROLE?.trim() || "worker";
 
-let sessionName = SESSION_ID;
+let sessionName = SESSION_NAME;
 
 type ChannelNotification = {
   method: "notifications/claude/channel";
@@ -187,7 +190,7 @@ function shutdown(): void {
 
 async function main(): Promise<void> {
   initBus();
-  handleRegister(SESSION_ID, SESSION_ID, SESSION_ROLE);
+  handleRegister(SESSION_ID, SESSION_NAME, SESSION_ROLE);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

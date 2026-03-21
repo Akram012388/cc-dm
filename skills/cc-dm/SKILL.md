@@ -14,8 +14,8 @@ copy-pasting context manually.
 Always register this session when cc-dm is available:
 
   Use the register tool to register this session.
-  Use the current session name as session_id and a short role description.
-  Example: register(session_id="planner", role="orchestrator")
+  Provide a display name and a short role description.
+  Example: register(name="planner", role="orchestrator")
 
 ## Sending a direct message
 
