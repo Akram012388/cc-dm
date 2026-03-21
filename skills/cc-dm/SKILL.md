@@ -11,11 +11,10 @@ copy-pasting context manually.
 
 ## On startup
 
-Always register this session when cc-dm is available:
-
-  Use the register tool to register this session.
-  Provide a display name and a short role description.
-  Example: register(name="planner", role="orchestrator")
+Your session is automatically registered at startup using environment
+variables (CC_DM_SESSION_NAME, CC_DM_SESSION_ROLE). Do NOT call register
+on startup — it would overwrite the configured values. Only call register
+if the user explicitly asks to change the session name or role.
 
 ## Sending a direct message
 

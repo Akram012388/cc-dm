@@ -36,7 +36,7 @@ const server = new Server<never, ChannelNotification>(
       experimental: { "claude/channel": {} },
       tools: {},
     },
-    instructions: `You are connected to cc-dm. Your session id is "${SESSION_ID}". Messages from other sessions arrive as <channel source="cc-dm" from_session="..." to_session="...">. Act on messages addressed to your session name or to_session="all". Available tools: register, dm, who, broadcast. Always register your session on startup if not already registered.`,
+    instructions: `You are connected to cc-dm. Your session id is "${SESSION_ID}". Your session is already registered as "${SESSION_NAME}" with role "${SESSION_ROLE}". Do NOT call register on startup — it is handled automatically. Only call register if the user explicitly asks to change the session name or role. Messages from other sessions arrive as <channel source="cc-dm" from_session="..." to_session="...">. Act on messages addressed to your session name or to_session="all". Available tools: register, dm, who, broadcast.`,
   }
 );
 
