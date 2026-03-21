@@ -52,6 +52,24 @@ Once inside, use natural language:
 
 > "Broadcast to all sessions: wrapping up in 10"
 
+## Multi-session orchestration
+
+Open two or more terminals and launch Claude Code with different session identities:
+
+**Terminal 1 — Planner:**
+```bash
+CC_DM_SESSION_ID=planner CC_DM_SESSION_ROLE=orchestrator claude --dangerously-load-development-channels server:cc-dm
+```
+
+**Terminal 2 — Backend:**
+```bash
+CC_DM_SESSION_ID=backend CC_DM_SESSION_ROLE=worker claude --dangerously-load-development-channels server:cc-dm
+```
+
+Or skip the env vars and register interactively using `/cc-dm:register` after launch.
+
+Sessions can now message each other directly, broadcast to all, and coordinate work across terminals.
+
 ## Session identity
 
 Set these environment variables before launching:

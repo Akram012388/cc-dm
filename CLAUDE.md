@@ -13,14 +13,18 @@ cc-dm is a Claude Code Channel plugin that enables direct peer-to-peer messaging
 ## Architecture
 
 ```
-src/bus.ts              SQLite WAL bus, sessions + messages tables
-src/tools.ts            Four tool handlers: dm, who, register, broadcast
-src/heartbeat.ts        30s heartbeat writer, 60s expiry cleanup
-src/server.ts           MCP entry point, claude/channel capability, poll loop
-skills/cc-dm/SKILL.md   Skill for natural language usage
-plugin.json             Plugin manifest
-.mcp.json               MCP server config
-install.sh              curl | bash installer
+.claude-plugin/plugin.json  Plugin manifest (marketplace metadata)
+src/bus.ts                  SQLite WAL bus, sessions + messages tables
+src/tools.ts                Four tool handlers: dm, who, register, broadcast
+src/heartbeat.ts            30s heartbeat writer, 60s expiry cleanup
+src/server.ts               MCP entry point, claude/channel capability, poll loop, shutdown
+skills/cc-dm/SKILL.md       Skill for natural language usage
+skills/register/SKILL.md    Interactive session registration skill
+.mcp.json                   MCP server config
+tests/                      Unit + integration tests (44 tests, bun:test)
+CHANGELOG.md                Version history
+LICENSE                     MIT license
+install.sh                  curl | bash installer
 ```
 
 ## Key implementation details
@@ -43,6 +47,8 @@ Session identity: `CC_DM_SESSION_ID` env var, falls back to `session-<random hex
 
 Bus path: `~/.cc-dm/bus.db`
 
+`initBus(dbPath?: string)` — optional param for test DB isolation. `closeBus()` — closes DB connection (used by tests). `shutdown()` — centralized cleanup in server.ts (stopPollLoop + stopHeartbeat + process.exit). `stopPollLoop()` — exported for clean shutdown.
+
 ## Do's
 
 - Use `bun:sqlite` for all database access — raw SQL only, no ORM
@@ -63,6 +69,7 @@ Bus path: `~/.cc-dm/bus.db`
 ## Testing
 
 ```bash
+bun test                   # 44 unit + integration tests
 bun run typecheck          # must pass before any commit
 bun run src/bus.ts         # bus smoke test
 bun run src/tools.ts       # tools smoke test

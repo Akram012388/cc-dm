@@ -27,7 +27,7 @@ type ChannelNotification = {
 };
 
 const server = new Server<never, ChannelNotification>(
-  { name: "cc-dm", version: "0.1.0" },
+  { name: "cc-dm", version: "1.0.0" },
   {
     capabilities: {
       experimental: { "claude/channel": {} },
