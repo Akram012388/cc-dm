@@ -1,0 +1,10 @@
+node_modules/
+bun.lockb
+dist/
+.env
+*.env
+.DS_Store
+~/.cc-dm/
+*.db
+*.db-shm
+*.db-wal
