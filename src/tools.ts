@@ -100,11 +100,13 @@ export function handleBroadcast(from: string, content: string): BroadcastResult 
     }
 
     const sessions = listActiveSessions();
-    const recipientCount = sessions.filter((s) => s.id !== from).length;
+    const recipients = sessions.filter((s) => s.id !== from);
 
-    writeMessage(from, "all", content);
+    for (const session of recipients) {
+      writeMessage(from, session.id, content);
+    }
 
-    return { success: true, from, recipientCount };
+    return { success: true, from, recipientCount: recipients.length };
   } catch (err) {
     return { success: false, from: "", recipientCount: 0, error: String(err) };
   }
