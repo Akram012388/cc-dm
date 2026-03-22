@@ -1,8 +1,5 @@
 {
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "cc-dm-marketplace",
-  "version": "1.0.0",
-  "description": "Peer-to-peer direct messaging between Claude Code sessions via the Channels protocol",
   "owner": {
     "name": "Shaikh Akram Ahmed",
     "email": "akram012388@gmail.com"
@@ -13,17 +10,12 @@
   "plugins": [
     {
       "name": "cc-dm",
-      "description": "Peer-to-peer direct messaging between Claude Code sessions via the Channels protocol",
-      "version": "1.0.0",
-      "author": {
-        "name": "Shaikh Akram Ahmed"
+      "source": {
+        "source": "url",
+        "url": "https://github.com/Akram012388/cc-dm.git"
       },
-      "source": ".",
-      "category": "development",
-      "keywords": ["messaging", "channels", "multi-session", "coordination", "sqlite", "mcp"],
-      "license": "MIT",
-      "homepage": "https://github.com/Akram012388/cc-dm",
-      "repository": "https://github.com/Akram012388/cc-dm"
+      "description": "Peer-to-peer direct messaging between Claude Code sessions via the Channels protocol",
+      "version": "1.0.0"
     }
   ]
 }
