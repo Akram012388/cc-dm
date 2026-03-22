@@ -198,19 +198,21 @@ describe("integration", () => {
     expect(msgs[0].content).toBe("note to self");
   });
 
-  test("DM fan-out to multiple sessions with same name", () => {
-    handleRegister("id-worker-1", "worker", "dev");
-    handleRegister("id-worker-2", "worker", "dev");
+  test("same-name registration rejected for different session", () => {
+    const r1 = handleRegister("id-worker-1", "worker", "dev");
+    expect(r1.success).toBe(true);
 
-    const dm = handleDm("planner", "worker", "task for all workers");
-    expect(dm.success).toBe(true);
+    const r2 = handleRegister("id-worker-2", "worker", "dev");
+    expect(r2.success).toBe(false);
+    expect(r2.error).toContain("already in use");
+  });
 
-    const w1 = readPendingMessages("id-worker-1");
-    expect(w1).toHaveLength(1);
-    expect(w1[0].content).toBe("task for all workers");
+  test("same-name re-registration allowed for same session", () => {
+    const r1 = handleRegister("id-worker-1", "worker", "dev");
+    expect(r1.success).toBe(true);
 
-    const w2 = readPendingMessages("id-worker-2");
-    expect(w2).toHaveLength(1);
-    expect(w2[0].content).toBe("task for all workers");
+    const r2 = handleRegister("id-worker-1", "worker", "reviewer");
+    expect(r2.success).toBe(true);
+    expect(r2.role).toBe("reviewer");
   });
 });

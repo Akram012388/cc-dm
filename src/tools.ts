@@ -1,6 +1,7 @@
 // MCP tool handlers: dm, who, register, broadcast
 
 import { writeMessage, listActiveSessions, registerSession, findSessionsByName, readPendingMessages } from "./bus.js";
+import { sanitize } from "./sanitize.js";
 
 export type DmResult = {
   success: boolean;
@@ -29,27 +30,32 @@ export type BroadcastResult = {
   error?: string;
 };
 
-function sanitize(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, "-");
-}
-
 export function handleRegister(sessionId: string, name: string, role: string): RegisterResult {
   try {
     if (!name || name.trim().length === 0) {
       return { success: false, sessionId: "", name: "", role: "", error: "name is required" };
     }
-    if (name.length > 64) {
-      return { success: false, sessionId: "", name: "", role: "", error: "name must be 64 chars or less" };
-    }
     if (!role || role.trim().length === 0) {
       return { success: false, sessionId: "", name: "", role: "", error: "role is required" };
-    }
-    if (role.length > 64) {
-      return { success: false, sessionId: "", name: "", role: "", error: "role must be 64 chars or less" };
     }
 
     const cleanName = sanitize(name);
     const cleanRole = sanitize(role);
+
+    if (cleanName.length > 64) {
+      return { success: false, sessionId: "", name: "", role: "", error: "name must be 64 chars or less" };
+    }
+    if (cleanRole.length > 64) {
+      return { success: false, sessionId: "", name: "", role: "", error: "role must be 64 chars or less" };
+    }
+
+    // Reject if name is already taken by a different session
+    const existing = findSessionsByName(cleanName);
+    const takenByOther = existing.some((s) => s.id !== sessionId);
+    if (takenByOther) {
+      return { success: false, sessionId: "", name: cleanName, role: "", error: "name already in use by another session" };
+    }
+
     const cwd = process.cwd();
     registerSession(sessionId, cleanName, cleanRole, cwd);
     return { success: true, sessionId, name: cleanName, role: cleanRole };

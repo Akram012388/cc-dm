@@ -99,7 +99,7 @@ If not set, Claude will ask you to register via the `/cc-dm:register` skill on f
 
 ## Remote access
 
-Use `/remote-control` in any session to access it from the Claude iOS app. cc-dm session names map directly to remote control targets. Run multiple sessions locally, drop into any one from your phone.
+Claude Code has a built-in `/remote-control` feature that lets you access any session from the Claude iOS app. This pairs naturally with cc-dm — run multiple named sessions locally, drop into any one from your phone, and use cc-dm to coordinate between them.
 
 ## Bus inspection
 
@@ -118,6 +118,7 @@ bun -e "
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| [v1.0.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.0.0) | 2026-03-22 | Production release — duplicate delivery guard, same-name protection, stronger session IDs |
 | [v0.3.0](https://github.com/Akram012388/cc-dm/releases/tag/v0.3.0) | 2026-03-22 | Fix MCP server path resolution for plugin marketplace installs |
 | [v0.2.0](https://github.com/Akram012388/cc-dm/releases/tag/v0.2.0) | 2026-03-21 | 44-test suite, clean shutdown, bus hardening |
 | [v0.1.0](https://github.com/Akram012388/cc-dm/releases/tag/v0.1.0) | 2026-03-21 | Initial release |
