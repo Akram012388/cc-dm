@@ -10,17 +10,24 @@ import { initBus, readPendingMessages, deleteDeliveredMessage, deregisterSession
 import { handleDm, handleWho, handleRegister, handleBroadcast } from "./tools.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 
-const SESSION_ID = `session-${Math.random().toString(16).slice(2, 8)}`;
+const SESSION_ID = `session-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 
 const NAME_PROVIDED = !!(process.env.CC_DM_SESSION_NAME?.trim() || process.env.CC_DM_SESSION_ID?.trim());
 const ROLE_PROVIDED = !!process.env.CC_DM_SESSION_ROLE?.trim();
 
-const SESSION_NAME =
+function sanitizeName(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, "-");
+}
+
+const SESSION_NAME = sanitizeName(
   process.env.CC_DM_SESSION_NAME?.trim() ||
   process.env.CC_DM_SESSION_ID?.trim() ||
-  SESSION_ID;
+  SESSION_ID
+);
 
-const SESSION_ROLE = process.env.CC_DM_SESSION_ROLE?.trim() || "worker";
+const SESSION_ROLE = sanitizeName(
+  process.env.CC_DM_SESSION_ROLE?.trim() || "worker"
+);
 
 let sessionName = SESSION_NAME;
 
@@ -159,6 +166,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 });
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+const deliveredIds = new Set<number>();
 
 function startPollLoop(): void {
   pollTimer = setInterval(async () => {
@@ -167,6 +175,10 @@ function startPollLoop(): void {
       if (messages.length === 0) return;
 
       for (const message of messages) {
+        if (deliveredIds.has(message.id)) {
+          try { deleteDeliveredMessage(message.id); } catch { /* retry delete */ }
+          continue;
+        }
         try {
           await server.notification({
             method: "notifications/claude/channel",
@@ -180,7 +192,9 @@ function startPollLoop(): void {
               },
             },
           });
+          deliveredIds.add(message.id);
           deleteDeliveredMessage(message.id);
+          deliveredIds.delete(message.id);
         } catch (err) {
           console.error(`[cc-dm/poll] failed to deliver message ${message.id}:`, err);
         }

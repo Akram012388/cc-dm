@@ -43,7 +43,9 @@ Broadcast writes one row per recipient with their specific session ID as `to_ses
 
 All logging via `console.error` — stdout is reserved for MCP stdio protocol.
 
-Session identity: `id` is always auto-generated as `session-<random hex>`. Display `name` comes from `CC_DM_SESSION_NAME` env var (falls back to `CC_DM_SESSION_ID` for backward compat, then to the auto-generated id). `role` comes from `CC_DM_SESSION_ROLE` (defaults to `worker`). `cwd` is captured from `process.cwd()` at registration.
+Session identity: `id` is always auto-generated as `session-<12 hex chars>` using `crypto.randomUUID()`. Display `name` comes from `CC_DM_SESSION_NAME` env var (falls back to `CC_DM_SESSION_ID` for backward compat, then to the auto-generated id). All names are sanitized (lowercase, trimmed, spaces→hyphens) at both server startup and tool invocation. `role` comes from `CC_DM_SESSION_ROLE` (defaults to `worker`). `cwd` is captured from `process.cwd()` at registration. Session names are unique — `handleRegister` rejects names already taken by a different session ID.
+
+**Important:** The `from_session` column in the `messages` table stores the sender's **display name**, not their session ID. This is a historical naming choice. Do not JOIN `messages.from_session` against `sessions.id` — they are different namespaces.
 
 Bus path: `~/.cc-dm/bus.db`
 
@@ -58,6 +60,7 @@ MCP server config is inline in `.claude-plugin/plugin.json` (not a separate `.mc
 - Keep tool count at 4: `dm`, `who`, `register`, `broadcast`
 - Wrap DB calls in try/catch in timer/shutdown contexts; let them throw in tool handlers
 - Use `.js` extensions on local imports (ESNext module resolution)
+- Use `process.once("exit", ...)` not `process.on("exit", ...)` to avoid listener accumulation
 
 ## Don'ts
 

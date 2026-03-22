@@ -3,7 +3,6 @@ set -euo pipefail
 
 REPO="https://github.com/Akram012388/cc-dm"
 INSTALL_DIR="$HOME/.cc-dm/plugin"
-CONFIG_FILE="$HOME/.claude/settings.json"
 
 echo ""
 echo "cc-dm — Claude Code Direct Message"
@@ -54,23 +53,13 @@ fi
 echo "Installing dependencies..."
 bun install --cwd "$INSTALL_DIR" --quiet
 
-# Inject MCP server config into ~/.claude/settings.json
-echo "Configuring Claude Code..."
+# Add the marketplace and install the plugin via Claude Code CLI
+echo "Adding cc-dm marketplace..."
 
-mkdir -p "$HOME/.claude"
-
-bun -e "
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-const path = '$CONFIG_FILE';
-const existing = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {};
-if (!existing.mcpServers) existing.mcpServers = {};
-existing.mcpServers['cc-dm'] = {
-  command: 'bun',
-  args: ['run', '$INSTALL_DIR/src/server.ts']
-};
-writeFileSync(path, JSON.stringify(existing, null, 2));
-console.log('MCP server registered in $CONFIG_FILE');
-"
+if command -v claude &> /dev/null; then
+  claude plugins marketplace add "$REPO.git" 2>/dev/null || echo "Marketplace may already be added."
+  claude plugins install cc-dm 2>/dev/null || echo "Plugin may already be installed."
+fi
 
 echo ""
 echo "===================================="
@@ -78,6 +67,9 @@ echo "cc-dm installed successfully."
 echo ""
 echo "To start a session:"
 echo "  CC_DM_SESSION_NAME=myname claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace"
+echo ""
+echo "Or add this alias to your shell profile:"
+echo "  alias cc-dm='claude --dangerously-skip-permissions --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace'"
 echo ""
 echo "Docs: $REPO"
 echo "===================================="

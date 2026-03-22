@@ -42,7 +42,7 @@ export function startHeartbeat(sessionId: string): void {
     }
   }, 60_000);
 
-  process.on("exit", () => stopHeartbeat());
+  process.once("exit", () => stopHeartbeat());
 }
 
 export function stopHeartbeat(): void {

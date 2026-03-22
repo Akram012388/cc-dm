@@ -4,11 +4,13 @@ All notable changes to cc-dm will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.0.0] - 2026-03-22
 
 ### Changed
 - Session identity: separate auto-generated `id` from user-provided `name` and `cwd`
+- Session IDs now use `crypto.randomUUID()` (48-bit entropy) instead of `Math.random()` (24-bit)
 - `CC_DM_SESSION_NAME` replaces `CC_DM_SESSION_ID` as primary env var (backward compat kept)
+- Session names sanitized at server startup, not just at tool invocation
 - DM routing resolves targets by display name via `findSessionsByName`
 - Message delivery: instant DELETE on delivery (was UPDATE `delivered = 1`)
 - Stale sessions: DELETE after 60s inactivity (was UPDATE `status = 'inactive'`)
@@ -17,8 +19,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Registration: detect-then-act — auto-register from env vars, invoke skill only when missing
 - Renamed `markDelivered` to `deleteDeliveredMessage` for clarity
 - Bus functions (`registerSession`, `findSessionsByName`, `listActiveSessions`, `deleteDeliveredMessage`) now throw on failure instead of silently returning defaults
+- Validate name/role length after sanitize, not before
+- Heartbeat uses `process.once("exit")` instead of `process.on("exit")` to prevent listener accumulation
+- `install.sh` uses marketplace install instead of injecting MCP config into settings.json
 
 ### Added
+- Duplicate delivery guard — local `Set<number>` in poll loop prevents re-delivery on delete failure
+- Same-name registration guard — `handleRegister` rejects names taken by other sessions
 - `deregisterSession` — clean session removal on shutdown
 - `readPendingMessages` — read without marking delivered (poll loop uses this)
 - `deleteDeliveredMessage` — instant row deletion after notification
@@ -27,16 +34,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - GitHub-hosted marketplace via `.claude-plugin/marketplace.json`
 - `bun install --no-summary` in start script for GitHub-hosted installs
 - Schema migration for `name` and `cwd` columns on existing DBs
+- Register skill: name-availability check before prompting, with active session list on conflict
 
 ### Removed
 - `.mcp.json` — replaced by inline `mcpServers` in `plugin.json`
 - `readMessages` — replaced by `readPendingMessages` + `deleteDeliveredMessage`
+- MCP server injection from `install.sh` — prevents dual-instance conflict with marketplace installs
 
 ### Fixed
 - Zombie processes: stdin close triggers clean shutdown
 - Message loss: delivery confirmation (delete) only after notification succeeds
 - Stale sessions: old session entry cleaned up immediately on re-registration
 - Empty catch blocks in schema migration now check for specific "duplicate column" error
+- Duplicate message delivery on transient DB write failure in poll loop
 
 ## [0.3.0] - 2026-03-22
 

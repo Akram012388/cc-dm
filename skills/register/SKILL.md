@@ -21,9 +21,11 @@ Before prompting the user, determine if registration is needed:
 
 1. Ask the user: **"What session name would you like to use?"** (e.g., planner, backend, reviewer, tests)
 2. Wait for their response.
-3. Ask the user: **"What role should this session have?"** (e.g., orchestrator, worker, reviewer, specialist)
-4. Wait for their response.
-5. Call the `register` tool with the provided `name` and `role`.
-6. Confirm success: "Registered as **{name}** with role **{role}**."
+3. Before proceeding, check the `who` results from the pre-check. If the requested name is already taken by another session, tell the user: **"That name is already in use."** Show the active session list and ask them to pick a different name. Repeat until available.
+4. Ask the user: **"What role should this session have?"** (e.g., orchestrator, worker, reviewer, specialist)
+5. Wait for their response.
+6. Call the `register` tool with the provided `name` and `role`.
+7. If the tool returns an error about the name being in use, show the error and ask the user to pick another name.
+8. Confirm success: "Registered as **{name}** with role **{role}**."
 
-If registration fails, report the error clearly.
+If registration fails for any other reason, report the error clearly.
