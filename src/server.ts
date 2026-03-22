@@ -9,23 +9,20 @@ import {
 import { initBus, readPendingMessages, deleteDeliveredMessage, deregisterSession } from "./bus.js";
 import { handleDm, handleWho, handleRegister, handleBroadcast } from "./tools.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
+import { sanitize } from "./sanitize.js";
 
 const SESSION_ID = `session-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 
 const NAME_PROVIDED = !!(process.env.CC_DM_SESSION_NAME?.trim() || process.env.CC_DM_SESSION_ID?.trim());
 const ROLE_PROVIDED = !!process.env.CC_DM_SESSION_ROLE?.trim();
 
-function sanitizeName(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, "-");
-}
-
-const SESSION_NAME = sanitizeName(
+const SESSION_NAME = sanitize(
   process.env.CC_DM_SESSION_NAME?.trim() ||
   process.env.CC_DM_SESSION_ID?.trim() ||
   SESSION_ID
 );
 
-const SESSION_ROLE = sanitizeName(
+const SESSION_ROLE = sanitize(
   process.env.CC_DM_SESSION_ROLE?.trim() || "worker"
 );
 

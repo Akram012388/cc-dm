@@ -1,6 +1,7 @@
 // MCP tool handlers: dm, who, register, broadcast
 
 import { writeMessage, listActiveSessions, registerSession, findSessionsByName, readPendingMessages } from "./bus.js";
+import { sanitize } from "./sanitize.js";
 
 export type DmResult = {
   success: boolean;
@@ -28,10 +29,6 @@ export type BroadcastResult = {
   recipientCount: number;
   error?: string;
 };
-
-function sanitize(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, "-");
-}
 
 export function handleRegister(sessionId: string, name: string, role: string): RegisterResult {
   try {

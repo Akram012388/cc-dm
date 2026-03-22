@@ -17,6 +17,7 @@ cc-dm is a Claude Code Channel plugin that enables direct peer-to-peer messaging
 .claude-plugin/marketplace.json  GitHub-hosted marketplace definition
 src/bus.ts                       SQLite WAL bus, sessions + messages tables
 src/tools.ts                     Four tool handlers: dm, who, register, broadcast
+src/sanitize.ts                  Shared string sanitizer (trim, lowercase, spaces→hyphens)
 src/heartbeat.ts                 30s heartbeat writer, 60s session expiry + 15s message expiry
 src/server.ts                    MCP entry point, claude/channel capability, poll loop, shutdown
 skills/cc-dm/SKILL.md            Skill for natural language usage
