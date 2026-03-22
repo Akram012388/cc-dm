@@ -5,7 +5,7 @@
   "description": "Peer-to-peer direct messaging between Claude Code sessions via the Channels protocol",
   "owner": {
     "name": "Shaikh Akram Ahmed",
-    "email": "shaikhakramdeveloper@gmail.com"
+    "email": "akram012388@gmail.com"
   },
   "metadata": {
     "description": "Marketplace for the cc-dm channel plugin — enables multi-session coordination through a shared SQLite message bus"
