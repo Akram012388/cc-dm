@@ -33,9 +33,27 @@ Each session spawns a cc-dm channel server via stdio. The server connects to a s
 curl -fsSL https://raw.githubusercontent.com/Akram012388/cc-dm/main/install.sh | bash
 ```
 
+## Quick alias
+
+Add this to your `~/.zshrc` or `~/.bashrc`:
+
+```bash
+alias cc-dm='claude --dangerously-skip-permissions --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace'
+```
+
+Then launch sessions with:
+
+```bash
+CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator cc-dm
+```
+
+Or just `cc-dm` and register interactively via `/cc-dm:register`.
+
+> **Note:** `--dangerously-skip-permissions` bypasses all tool permission prompts for the session, not just cc-dm's. Use with awareness.
+
 ## Usage
 
-Start a session with cc-dm:
+Start a session without the alias:
 
 ```bash
 CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator \
