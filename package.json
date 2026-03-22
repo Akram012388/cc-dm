@@ -7,7 +7,7 @@
   "type": "module",
   "main": "src/server.ts",
   "scripts": {
-    "start": "bun run src/server.ts",
+    "start": "bun install --no-summary && bun src/server.ts",
     "dev": "bun --watch src/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test"

@@ -11,11 +11,13 @@ copy-pasting context manually.
 
 ## On startup
 
-Always register this session when cc-dm is available:
+Session registration is handled automatically from environment variables
+(CC_DM_SESSION_NAME, CC_DM_SESSION_ROLE). Check the MCP instructions to
+see if name and role are already configured:
 
-  Use the register tool to register this session.
-  Use the current session name as session_id and a short role description.
-  Example: register(session_id="planner", role="orchestrator")
+- **Both configured:** Do nothing. Registration is complete.
+- **Either missing:** Invoke the /cc-dm:register skill on first interaction
+  to ask the user for the missing value(s). Never guess or self-assign.
 
 ## Sending a direct message
 
@@ -37,7 +39,7 @@ Incoming messages arrive as a <channel> event in your context:
 
 When you receive a <channel> event:
 1. Acknowledge it briefly in your response
-2. Act on the instruction if it is addressed to your session id
+2. Act on the instruction if it is addressed to your session name
 3. Optionally reply using the dm tool
 
 ## Broadcasting
@@ -60,4 +62,4 @@ When the user asks "who is active" or "who is online" or "list sessions":
 - Do not poll manually — messages arrive automatically via the channel
 - Do not register more than once per session startup
 - If a dm fails, report the error and move on — do not retry in a loop
-- Messages to offline sessions are queued and delivered when they reconnect
+- Messages to offline sessions expire after 15 seconds if undelivered

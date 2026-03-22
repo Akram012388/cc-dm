@@ -8,5 +8,11 @@
   "homepage": "https://github.com/Akram012388/cc-dm",
   "repository": "https://github.com/Akram012388/cc-dm",
   "license": "MIT",
-  "keywords": ["messaging", "channels", "multi-session", "coordination", "sqlite", "mcp"]
+  "keywords": ["messaging", "channels", "multi-session", "coordination", "sqlite", "mcp"],
+  "mcpServers": {
+    "cc-dm": {
+      "command": "bun",
+      "args": ["run", "--cwd", "${CLAUDE_PLUGIN_ROOT}", "--silent", "start"]
+    }
+  }
 }

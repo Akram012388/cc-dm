@@ -7,7 +7,8 @@ import {
   initBus,
   closeBus,
   registerSession,
-  readMessages,
+  readPendingMessages,
+  deleteDeliveredMessage,
 } from "../src/bus.js";
 import {
   handleRegister,
@@ -36,29 +37,30 @@ afterEach(() => {
 });
 
 describe("handleRegister", () => {
-  test("validates empty sessionId", () => {
-    const result = handleRegister("", "worker");
+  test("validates empty name", () => {
+    const result = handleRegister("test-id", "", "worker");
     expect(result.success).toBe(false);
-    expect(result.error).toContain("sessionId is required");
+    expect(result.error).toContain("name is required");
   });
 
-  test("validates >64 char sessionId", () => {
-    const result = handleRegister("a".repeat(65), "worker");
+  test("validates >64 char name", () => {
+    const result = handleRegister("test-id", "a".repeat(65), "worker");
     expect(result.success).toBe(false);
     expect(result.error).toContain("64 chars");
   });
 
   test("sanitizes input", () => {
-    const result = handleRegister("  MY Session  ", "  Some Role  ");
+    const result = handleRegister("test-id", "  MY Session  ", "  Some Role  ");
     expect(result.success).toBe(true);
-    expect(result.sessionId).toBe("my-session");
+    expect(result.name).toBe("my-session");
     expect(result.role).toBe("some-role");
   });
 
   test("succeeds with valid input", () => {
-    const result = handleRegister("planner", "orchestrator");
+    const result = handleRegister("test-id", "planner", "orchestrator");
     expect(result.success).toBe(true);
-    expect(result.sessionId).toBe("planner");
+    expect(result.sessionId).toBe("test-id");
+    expect(result.name).toBe("planner");
     expect(result.role).toBe("orchestrator");
   });
 });
@@ -88,13 +90,20 @@ describe("handleDm", () => {
     expect(result.error).toContain("under 10000");
   });
 
-  test("sanitizes to param", () => {
+  test("resolves target by name and sanitizes", () => {
+    registerSession("id-planner", "planner", "worker", "/tmp");
     const result = handleDm("sender", "  PLANNER  ", "hello");
     expect(result.success).toBe(true);
     expect(result.to).toBe("planner");
   });
 
-  test("reports writeMessage failure", () => {
+  test("fails when target name not found", () => {
+    const result = handleDm("sender", "nonexistent", "hello");
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("no active session with that name");
+  });
+
+  test("reports error on closed bus", () => {
     closeBus();
     const result = handleDm("sender", "target", "hello");
     expect(result.success).toBe(false);
@@ -105,21 +114,20 @@ describe("handleDm", () => {
 });
 
 describe("handleWho", () => {
-  test("returns active sessions", () => {
-    registerSession("alpha", "worker");
-    registerSession("beta", "reviewer");
+  test("returns active sessions with all fields", () => {
+    registerSession("id-alpha", "alpha", "worker", "/project-a");
+    registerSession("id-beta", "beta", "reviewer", "/project-b");
     const result = handleWho();
     expect(result.count).toBe(2);
-    expect(result.sessions.map((s) => s.id)).toContain("alpha");
-    expect(result.sessions.map((s) => s.id)).toContain("beta");
+    expect(result.sessions.map((s) => s.name)).toContain("alpha");
+    expect(result.sessions.map((s) => s.name)).toContain("beta");
+    const alpha = result.sessions.find((s) => s.name === "alpha")!;
+    expect(alpha.id).toBe("id-alpha");
+    expect(alpha.cwd).toBe("/project-a");
   });
 
   test("returns error field on failure", () => {
     closeBus();
-    // listActiveSessions catches internally and returns [], so handleWho
-    // won't enter its own catch. Instead, test that handleWho's catch path
-    // works by verifying the type supports error field and the DB-closed
-    // scenario returns empty gracefully.
     const result = handleWho();
     expect(result.count).toBe(0);
     expect(result.sessions).toEqual([]);
@@ -130,23 +138,24 @@ describe("handleWho", () => {
 
 describe("handleBroadcast", () => {
   test("excludes sender from recipients", () => {
-    registerSession("sender", "worker");
-    registerSession("receiver", "worker");
-    const result = handleBroadcast("sender", "hello all");
+    registerSession("id-sender", "sender", "worker", "/tmp");
+    registerSession("id-receiver", "receiver", "worker", "/tmp");
+    const result = handleBroadcast("id-sender", "sender", "hello all");
     expect(result.success).toBe(true);
     expect(result.recipientCount).toBe(1);
 
-    const senderMsgs = readMessages("sender");
+    const senderMsgs = readPendingMessages("id-sender");
     expect(senderMsgs).toHaveLength(0);
 
-    const receiverMsgs = readMessages("receiver");
+    const receiverMsgs = readPendingMessages("id-receiver");
     expect(receiverMsgs).toHaveLength(1);
+    expect(receiverMsgs[0].from_session).toBe("sender");
   });
 
   test("reports partial failures", () => {
-    registerSession("sender", "worker");
-    registerSession("receiver1", "worker");
-    registerSession("receiver2", "worker");
+    registerSession("id-sender", "sender", "worker", "/tmp");
+    registerSession("id-r1", "receiver1", "worker", "/tmp");
+    registerSession("id-r2", "receiver2", "worker", "/tmp");
 
     // Drop messages table so writeMessage fails, but listActiveSessions
     // still works (reads from sessions table)
@@ -154,14 +163,14 @@ describe("handleBroadcast", () => {
     db.run("DROP TABLE messages");
     db.close();
 
-    const result = handleBroadcast("sender", "hello all");
+    const result = handleBroadcast("id-sender", "sender", "hello all");
     expect(result.success).toBe(false);
     expect(result.error).toContain("failed to deliver");
     expect(result.recipientCount).toBe(0);
   });
 
   test("validates empty content", () => {
-    const result = handleBroadcast("sender", "");
+    const result = handleBroadcast("id-sender", "sender", "");
     expect(result.success).toBe(false);
     expect(result.error).toContain("content is required");
   });

@@ -35,7 +35,7 @@ describe("startHeartbeat", () => {
   });
 
   test("writes initial heartbeat immediately", () => {
-    registerSession("hb-test", "worker");
+    registerSession("hb-test", "hb-test", "worker", "/tmp");
 
     const db1 = new Database(tmpDbPath, { readonly: true });
     const before = db1.query<{ last_seen: string }, [string]>(
@@ -58,12 +58,12 @@ describe("startHeartbeat", () => {
     const old = new Date(Date.now() - 120_000).toISOString();
     const db = new Database(tmpDbPath);
     db.run(
-      "INSERT INTO sessions (id, role, status, last_seen, registered_at) VALUES (?, ?, 'active', ?, ?)",
-      ["stale-session", "worker", old, old]
+      "INSERT INTO sessions (id, name, role, cwd, status, last_seen, registered_at) VALUES (?, ?, ?, ?, 'active', ?, ?)",
+      ["stale-session", "stale", "worker", "/tmp", old, old]
     );
     db.close();
 
-    registerSession("hb-test", "worker");
+    registerSession("hb-test", "hb-test", "worker", "/tmp");
     startHeartbeat("hb-test");
 
     const db2 = new Database(tmpDbPath, { readonly: true });
@@ -72,13 +72,13 @@ describe("startHeartbeat", () => {
     ).get("stale-session");
     db2.close();
 
-    expect(row!.status).toBe("inactive");
+    expect(row).toBeNull();
   });
 });
 
 describe("stopHeartbeat", () => {
   test("clears all timers", () => {
-    registerSession("hb-test", "worker");
+    registerSession("hb-test", "hb-test", "worker", "/tmp");
     startHeartbeat("hb-test");
     stopHeartbeat();
     // Calling stopHeartbeat again should be safe (idempotent)
@@ -89,7 +89,7 @@ describe("stopHeartbeat", () => {
 
 describe("startHeartbeat idempotency", () => {
   test("calling twice stops previous timers", () => {
-    registerSession("hb-test", "worker");
+    registerSession("hb-test", "hb-test", "worker", "/tmp");
     startHeartbeat("hb-test");
     // Second call should stop the first timers and start new ones
     startHeartbeat("hb-test");

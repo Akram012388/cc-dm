@@ -6,17 +6,23 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { initBus, readMessages } from "./bus.js";
+import { initBus, readPendingMessages, deleteDeliveredMessage, deregisterSession } from "./bus.js";
 import { handleDm, handleWho, handleRegister, handleBroadcast } from "./tools.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 
-const SESSION_ID =
+const SESSION_ID = `session-${Math.random().toString(16).slice(2, 8)}`;
+
+const NAME_PROVIDED = !!(process.env.CC_DM_SESSION_NAME?.trim() || process.env.CC_DM_SESSION_ID?.trim());
+const ROLE_PROVIDED = !!process.env.CC_DM_SESSION_ROLE?.trim();
+
+const SESSION_NAME =
+  process.env.CC_DM_SESSION_NAME?.trim() ||
   process.env.CC_DM_SESSION_ID?.trim() ||
-  `session-${Math.random().toString(16).slice(2, 8)}`;
+  SESSION_ID;
 
 const SESSION_ROLE = process.env.CC_DM_SESSION_ROLE?.trim() || "worker";
 
-let activeSessionId = SESSION_ID;
+let sessionName = SESSION_NAME;
 
 type ChannelNotification = {
   method: "notifications/claude/channel";
@@ -26,6 +32,18 @@ type ChannelNotification = {
   };
 };
 
+function buildRegistrationInstruction(): string {
+  if (NAME_PROVIDED && ROLE_PROVIDED) {
+    return `Your session is registered as "${SESSION_NAME}" with role "${SESSION_ROLE}". Do NOT call register unless the user explicitly asks to change the name or role.`;
+  }
+  const missing = [];
+  if (!NAME_PROVIDED) missing.push("session name");
+  if (!ROLE_PROVIDED) missing.push("role");
+  return `Your ${missing.join(" and ")} ${missing.length === 1 ? "has" : "have"} not been configured. On your first interaction, invoke the /cc-dm:register skill to ask the user for ${missing.length === 1 ? "it" : "both values"}. Do NOT guess or self-assign values.`;
+}
+
+const registrationInstruction = buildRegistrationInstruction();
+
 const server = new Server<never, ChannelNotification>(
   { name: "cc-dm", version: "1.0.0" },
   {
@@ -33,7 +51,7 @@ const server = new Server<never, ChannelNotification>(
       experimental: { "claude/channel": {} },
       tools: {},
     },
-    instructions: `You are connected to cc-dm. Your session id is "${SESSION_ID}". Messages from other sessions arrive as <channel source="cc-dm" from_session="..." to_session="...">. Act on messages addressed to your session id or to_session="all". Available tools: register, dm, who, broadcast. Always register your session on startup if not already registered.`,
+    instructions: `You are connected to cc-dm. Your session id is "${SESSION_ID}". ${registrationInstruction} Messages from other sessions arrive as <channel source="cc-dm" from_session="..." to_session="...">. Act on messages addressed to your session name. Available tools: register, dm, who, broadcast.`,
   }
 );
 
@@ -41,31 +59,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "register",
-      description: "Register this session with a name and role in cc-dm",
+      description: "Register this session with a display name and role in cc-dm",
       inputSchema: {
         type: "object" as const,
         properties: {
-          session_id: {
+          name: {
             type: "string",
-            description: "Unique name for this session e.g. planner, backend, tests",
+            description: "Display name for this session e.g. planner, backend, tests",
           },
           role: {
             type: "string",
             description: "Role description e.g. orchestrator, worker, reviewer",
           },
         },
-        required: ["session_id", "role"],
+        required: ["name", "role"],
       },
     },
     {
       name: "dm",
-      description: "Send a direct message to another session or to all sessions",
+      description: "Send a direct message to another session by name",
       inputSchema: {
         type: "object" as const,
         properties: {
           to: {
             type: "string",
-            description: "Target session id, or 'all' to broadcast",
+            description: "Target session name",
           },
           content: {
             type: "string",
@@ -105,19 +123,19 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   switch (req.params.name) {
     case "register": {
       const result = handleRegister(
-        String(req.params.arguments?.session_id ?? ""),
+        SESSION_ID,
+        String(req.params.arguments?.name ?? ""),
         String(req.params.arguments?.role ?? "")
       );
-      if (result.success && result.sessionId !== activeSessionId) {
-        activeSessionId = result.sessionId;
-        startHeartbeat(activeSessionId);
-        console.error(`cc-dm session identity updated to "${activeSessionId}"`);
+      if (result.success) {
+        sessionName = result.name;
+        console.error(`cc-dm session name updated to "${sessionName}"`);
       }
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     }
     case "dm": {
       const result = handleDm(
-        activeSessionId,
+        sessionName,
         String(req.params.arguments?.to ?? ""),
         String(req.params.arguments?.content ?? "")
       );
@@ -129,7 +147,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     }
     case "broadcast": {
       const result = handleBroadcast(
-        activeSessionId,
+        SESSION_ID,
+        sessionName,
         String(req.params.arguments?.content ?? "")
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
@@ -141,29 +160,33 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-// Using notification() — sendNotification() not available in installed SDK version
 function startPollLoop(): void {
   pollTimer = setInterval(async () => {
     try {
-      const messages = readMessages(activeSessionId);
+      const messages = readPendingMessages(SESSION_ID);
       if (messages.length === 0) return;
 
       for (const message of messages) {
-        await server.notification({
-          method: "notifications/claude/channel",
-          params: {
-            content: message.content,
-            meta: {
-              from_session: message.from_session,
-              to_session: activeSessionId,
-              message_id: String(message.id),
-              sent_at: message.created_at,
+        try {
+          await server.notification({
+            method: "notifications/claude/channel",
+            params: {
+              content: message.content,
+              meta: {
+                from_session: message.from_session,
+                to_session: sessionName,
+                message_id: String(message.id),
+                sent_at: message.created_at,
+              },
             },
-          },
-        });
+          });
+          deleteDeliveredMessage(message.id);
+        } catch (err) {
+          console.error(`[cc-dm/poll] failed to deliver message ${message.id}:`, err);
+        }
       }
     } catch (err) {
-      console.error("[cc-dm/poll] error:", err);
+      console.error("[cc-dm/poll] error reading messages:", err);
     }
   }, 500);
 }
@@ -178,12 +201,14 @@ export function stopPollLoop(): void {
 function shutdown(): void {
   stopPollLoop();
   stopHeartbeat();
+  deregisterSession(SESSION_ID);
+  console.error(`cc-dm session "${sessionName}" (${SESSION_ID}) deregistered`);
   process.exit(0);
 }
 
 async function main(): Promise<void> {
   initBus();
-  handleRegister(SESSION_ID, SESSION_ROLE);
+  handleRegister(SESSION_ID, SESSION_NAME, SESSION_ROLE);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -195,8 +220,9 @@ async function main(): Promise<void> {
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+  process.stdin.on("end", shutdown);
 
-  console.error(`cc-dm session "${SESSION_ID}" (${SESSION_ROLE}) started`);
+  console.error(`cc-dm session "${SESSION_NAME}" [${SESSION_ID}] (${SESSION_ROLE}) started`);
   console.error(`Bus: ~/.cc-dm/bus.db`);
   console.error(`Poll: 500ms`);
 }

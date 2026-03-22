@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+- Session identity: separate auto-generated `id` from user-provided `name` and `cwd`
+- `CC_DM_SESSION_NAME` replaces `CC_DM_SESSION_ID` as primary env var (backward compat kept)
+- DM routing resolves targets by display name via `findSessionsByName`
+- Message delivery: instant DELETE on delivery (was UPDATE `delivered = 1`)
+- Stale sessions: DELETE after 60s inactivity (was UPDATE `status = 'inactive'`)
+- Undelivered messages expire after 15 seconds (was 1 hour for delivered messages)
+- MCP config moved from `.mcp.json` to inline in `plugin.json` (avoids project-level conflict)
+- Registration: detect-then-act — auto-register from env vars, invoke skill only when missing
+- Renamed `markDelivered` to `deleteDeliveredMessage` for clarity
+- Bus functions (`registerSession`, `findSessionsByName`, `listActiveSessions`, `deleteDeliveredMessage`) now throw on failure instead of silently returning defaults
+
+### Added
+- `deregisterSession` — clean session removal on shutdown
+- `readPendingMessages` — read without marking delivered (poll loop uses this)
+- `deleteDeliveredMessage` — instant row deletion after notification
+- `findSessionsByName` — name-based session lookup for DM routing
+- Stdin close detection (`process.stdin.on('end')`) to prevent zombie processes
+- GitHub-hosted marketplace via `.claude-plugin/marketplace.json`
+- `bun install --no-summary` in start script for GitHub-hosted installs
+- Schema migration for `name` and `cwd` columns on existing DBs
+
+### Removed
+- `.mcp.json` — replaced by inline `mcpServers` in `plugin.json`
+- `readMessages` — replaced by `readPendingMessages` + `deleteDeliveredMessage`
+
+### Fixed
+- Zombie processes: stdin close triggers clean shutdown
+- Message loss: delivery confirmation (delete) only after notification succeeds
+- Stale sessions: old session entry cleaned up immediately on re-registration
+- Empty catch blocks in schema migration now check for specific "duplicate column" error
+
 ## [0.3.0] - 2026-03-22
 
 ### Added
