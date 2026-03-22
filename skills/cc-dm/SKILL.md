@@ -39,7 +39,7 @@ Incoming messages arrive as a <channel> event in your context:
 
 When you receive a <channel> event:
 1. Acknowledge it briefly in your response
-2. Act on the instruction if it is addressed to your session id
+2. Act on the instruction if it is addressed to your session name
 3. Optionally reply using the dm tool
 
 ## Broadcasting
@@ -62,4 +62,4 @@ When the user asks "who is active" or "who is online" or "list sessions":
 - Do not poll manually — messages arrive automatically via the channel
 - Do not register more than once per session startup
 - If a dm fails, report the error and move on — do not retry in a loop
-- Messages to offline sessions are queued and delivered when they reconnect
+- Messages to offline sessions expire after 15 seconds if undelivered

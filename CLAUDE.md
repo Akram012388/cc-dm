@@ -13,18 +13,18 @@ cc-dm is a Claude Code Channel plugin that enables direct peer-to-peer messaging
 ## Architecture
 
 ```
-.claude-plugin/plugin.json  Plugin manifest (marketplace metadata)
-src/bus.ts                  SQLite WAL bus, sessions + messages tables
-src/tools.ts                Four tool handlers: dm, who, register, broadcast
-src/heartbeat.ts            30s heartbeat writer, 60s expiry cleanup
-src/server.ts               MCP entry point, claude/channel capability, poll loop, shutdown
-skills/cc-dm/SKILL.md       Skill for natural language usage
-skills/register/SKILL.md    Interactive session registration skill
-.mcp.json                   MCP server config
-tests/                      Unit + integration tests (44 tests, bun:test)
-CHANGELOG.md                Version history
-LICENSE                     MIT license
-install.sh                  curl | bash installer
+.claude-plugin/plugin.json       Plugin manifest + inline mcpServers config
+.claude-plugin/marketplace.json  GitHub-hosted marketplace definition
+src/bus.ts                       SQLite WAL bus, sessions + messages tables
+src/tools.ts                     Four tool handlers: dm, who, register, broadcast
+src/heartbeat.ts                 30s heartbeat writer, 60s session expiry + 15s message expiry
+src/server.ts                    MCP entry point, claude/channel capability, poll loop, shutdown
+skills/cc-dm/SKILL.md            Skill for natural language usage
+skills/register/SKILL.md         Interactive session registration skill
+tests/                           Unit + integration tests (48+ tests, bun:test)
+CHANGELOG.md                     Version history
+LICENSE                          MIT license
+install.sh                       curl | bash installer
 ```
 
 ## Key implementation details
@@ -37,24 +37,26 @@ capabilities.experimental['claude/channel']: {}
 
 SDK notification type extended via `Server<never, ChannelNotification>` generic to support the custom `notifications/claude/channel` method.
 
-Poll loop: `setInterval` at 500ms with async inner callback, awaits each `server.notification()` call individually.
+Poll loop: `setInterval` at 500ms with async inner callback. Uses `readPendingMessages` to read, `server.notification()` to deliver, then `deleteDeliveredMessage` to remove the row. Each message has its own try/catch so one failure doesn't block the batch.
 
-Broadcast writes one row per recipient with their specific session ID as `to_session`. Do not use `to_session='all'` — this causes a delivered-flag race condition across concurrent poll loops where whichever session polls first marks the message delivered, preventing other sessions from seeing it.
+Broadcast writes one row per recipient with their specific session ID as `to_session`. Do not use `to_session='all'` — this causes a race condition across concurrent poll loops where whichever session polls first deletes the message, preventing other sessions from seeing it.
 
 All logging via `console.error` — stdout is reserved for MCP stdio protocol.
 
-Session identity: `CC_DM_SESSION_ID` env var, falls back to `session-<random hex>`.
+Session identity: `id` is always auto-generated as `session-<random hex>`. Display `name` comes from `CC_DM_SESSION_NAME` env var (falls back to `CC_DM_SESSION_ID` for backward compat, then to the auto-generated id). `role` comes from `CC_DM_SESSION_ROLE` (defaults to `worker`). `cwd` is captured from `process.cwd()` at registration.
 
 Bus path: `~/.cc-dm/bus.db`
 
-`initBus(dbPath?: string)` — optional param for test DB isolation. `closeBus()` — closes DB connection (used by tests). `shutdown()` — centralized cleanup in server.ts (stopPollLoop + stopHeartbeat + process.exit). `stopPollLoop()` — exported for clean shutdown.
+`initBus(dbPath?: string)` — optional param for test DB isolation. `closeBus()` — closes DB connection (used by tests). `shutdown()` — centralized cleanup in server.ts (stopPollLoop + stopHeartbeat + deregisterSession + process.exit). `stopPollLoop()` — exported for clean shutdown. Process listens for SIGINT, SIGTERM, and stdin close to trigger shutdown.
+
+MCP server config is inline in `.claude-plugin/plugin.json` (not a separate `.mcp.json`) to avoid Claude Code reading it as a project-level MCP config where `${CLAUDE_PLUGIN_ROOT}` is unavailable.
 
 ## Do's
 
 - Use `bun:sqlite` for all database access — raw SQL only, no ORM
 - Use `console.error` for all logging
 - Keep tool count at 4: `dm`, `who`, `register`, `broadcast`
-- Wrap all DB calls and notification sends in try/catch
+- Wrap DB calls in try/catch in timer/shutdown contexts; let them throw in tool handlers
 - Use `.js` extensions on local imports (ESNext module resolution)
 
 ## Don'ts
@@ -64,19 +66,20 @@ Bus path: `~/.cc-dm/bus.db`
 - Do not expose any network port — stdio only
 - Do not use `console.log` anywhere in `src/`
 - Do not revert broadcast to `to_session='all'` — the race condition is real
-- Do not hardcode `CC_DM_SESSION_ID` in `.mcp.json`
+- Do not hardcode session identity env vars in plugin config
+- Do not create a `.mcp.json` in the project root — use plugin.json mcpServers
 
 ## Testing
 
 ```bash
-bun test                   # 44 unit + integration tests
+bun test                   # 48+ unit + integration tests
 bun run typecheck          # must pass before any commit
 bun run src/bus.ts         # bus smoke test
 bun run src/tools.ts       # tools smoke test
 bun run src/heartbeat.ts   # heartbeat smoke test
 ```
 
-Live e2e test: open two terminals with different `CC_DM_SESSION_ID` values and verify message delivery end-to-end.
+Live e2e test: open two terminals with different `CC_DM_SESSION_NAME` values and verify message delivery end-to-end.
 
 ---
 

@@ -8,7 +8,8 @@ import {
   closeBus,
   registerSession,
   writeMessage,
-  readMessages,
+  readPendingMessages,
+  deleteDeliveredMessage,
   listActiveSessions,
   expireStaleSessions,
 } from "../src/bus.js";
@@ -39,21 +40,29 @@ afterEach(() => {
 });
 
 describe("integration", () => {
-  test("full DM flow", () => {
+  test("full DM flow with two-step delivery", () => {
     handleRegister("id-alice", "alice", "worker");
     handleRegister("id-bob", "bob", "worker");
 
     const dm = handleDm("alice", "bob", "hey bob");
     expect(dm.success).toBe(true);
 
-    const msgs = readMessages("id-bob");
+    // Step 1: read pending (does not consume)
+    const msgs = readPendingMessages("id-bob");
     expect(msgs).toHaveLength(1);
     expect(msgs[0].from_session).toBe("alice");
     expect(msgs[0].content).toBe("hey bob");
 
-    // Marked as delivered
-    const again = readMessages("id-bob");
-    expect(again).toHaveLength(0);
+    // Still pending — second read returns same messages
+    const stillPending = readPendingMessages("id-bob");
+    expect(stillPending).toHaveLength(1);
+
+    // Step 2: delete after delivery
+    deleteDeliveredMessage(msgs[0].id);
+
+    // Now consumed
+    const empty = readPendingMessages("id-bob");
+    expect(empty).toHaveLength(0);
   });
 
   test("broadcast delivery", () => {
@@ -65,14 +74,14 @@ describe("integration", () => {
     expect(bc.success).toBe(true);
     expect(bc.recipientCount).toBe(2);
 
-    const bobMsgs = readMessages("id-bob");
+    const bobMsgs = readPendingMessages("id-bob");
     expect(bobMsgs).toHaveLength(1);
     expect(bobMsgs[0].content).toBe("hello everyone");
 
-    const charlieMsgs = readMessages("id-charlie");
+    const charlieMsgs = readPendingMessages("id-charlie");
     expect(charlieMsgs).toHaveLength(1);
 
-    const aliceMsgs = readMessages("id-alice");
+    const aliceMsgs = readPendingMessages("id-alice");
     expect(aliceMsgs).toHaveLength(0);
   });
 
@@ -82,19 +91,19 @@ describe("integration", () => {
 
     handleBroadcast("id-alice", "alice", "isolated msg");
 
-    // Bob reads his copy
-    const bobMsgs = readMessages("id-bob");
+    const bobMsgs = readPendingMessages("id-bob");
     expect(bobMsgs).toHaveLength(1);
+    // Consume bob's copy
+    deleteDeliveredMessage(bobMsgs[0].id);
 
-    // Alice should still have no messages (she's the sender)
     handleRegister("id-charlie", "charlie", "worker");
     handleBroadcast("id-alice", "alice", "second msg");
 
-    const bobMsgs2 = readMessages("id-bob");
+    const bobMsgs2 = readPendingMessages("id-bob");
     expect(bobMsgs2).toHaveLength(1);
     expect(bobMsgs2[0].content).toBe("second msg");
 
-    const charlieMsgs = readMessages("id-charlie");
+    const charlieMsgs = readPendingMessages("id-charlie");
     expect(charlieMsgs).toHaveLength(1);
     expect(charlieMsgs[0].content).toBe("second msg");
   });
@@ -117,21 +126,18 @@ describe("integration", () => {
   test("re-registration recovers session", () => {
     handleRegister("id-alice", "alice", "worker");
 
-    // Send a message to alice's ID
     writeMessage("bob", "id-alice", "queued msg");
 
-    // Expire alice
     const old = new Date(Date.now() - 120_000).toISOString();
     const db = new Database(tmpDbPath);
     db.run("UPDATE sessions SET last_seen = ? WHERE id = ?", [old, "id-alice"]);
     db.close();
     expireStaleSessions();
 
-    // Re-register
     handleRegister("id-alice", "alice", "worker");
 
-    // Alice should still receive the queued message
-    const msgs = readMessages("id-alice");
+    // Message is still in DB (written < 15s ago)
+    const msgs = readPendingMessages("id-alice");
     expect(msgs).toHaveLength(1);
     expect(msgs[0].content).toBe("queued msg");
   });
@@ -147,11 +153,10 @@ describe("integration", () => {
     writeMessage("alice", "id-charlie", "a3");
     writeMessage("bob", "id-charlie", "b2");
 
-    const msgs = readMessages("id-charlie");
+    const msgs = readPendingMessages("id-charlie");
     expect(msgs).toHaveLength(5);
     expect(msgs.map((m) => m.content)).toEqual(["a1", "a2", "b1", "a3", "b2"]);
 
-    // Verify strict id ordering
     for (let i = 1; i < msgs.length; i++) {
       expect(msgs[i].id).toBeGreaterThan(msgs[i - 1].id);
     }
@@ -164,29 +169,18 @@ describe("integration", () => {
     expect(dm.success).toBe(true);
     expect(dm.to).toBe("planner");
 
-    const msgs = readMessages("id-planner");
+    const msgs = readPendingMessages("id-planner");
     expect(msgs).toHaveLength(1);
     expect(msgs[0].content).toBe("hello planner");
-  });
-
-  test("second read returns empty after delivery", () => {
-    writeMessage("sender", "target-id", "unique msg");
-
-    const r1 = readMessages("target-id");
-    const r2 = readMessages("target-id");
-
-    expect(r1.length + r2.length).toBe(1);
   });
 
   test("large content boundary", () => {
     handleRegister("id-sender", "sender", "worker");
     handleRegister("id-receiver", "receiver", "worker");
 
-    // Exactly 10,000 chars should succeed
     const ok = handleDm("sender", "receiver", "x".repeat(10_000));
     expect(ok.success).toBe(true);
 
-    // 10,001 chars should fail
     const fail = handleDm("sender", "receiver", "x".repeat(10_001));
     expect(fail.success).toBe(false);
     expect(fail.error).toContain("under 10000");
@@ -198,9 +192,25 @@ describe("integration", () => {
     const dm = handleDm("alice", "alice", "note to self");
     expect(dm.success).toBe(true);
 
-    const msgs = readMessages("id-alice");
+    const msgs = readPendingMessages("id-alice");
     expect(msgs).toHaveLength(1);
     expect(msgs[0].from_session).toBe("alice");
     expect(msgs[0].content).toBe("note to self");
+  });
+
+  test("DM fan-out to multiple sessions with same name", () => {
+    handleRegister("id-worker-1", "worker", "dev");
+    handleRegister("id-worker-2", "worker", "dev");
+
+    const dm = handleDm("planner", "worker", "task for all workers");
+    expect(dm.success).toBe(true);
+
+    const w1 = readPendingMessages("id-worker-1");
+    expect(w1).toHaveLength(1);
+    expect(w1[0].content).toBe("task for all workers");
+
+    const w2 = readPendingMessages("id-worker-2");
+    expect(w2).toHaveLength(1);
+    expect(w2[0].content).toBe("task for all workers");
   });
 });

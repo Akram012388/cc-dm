@@ -7,7 +7,8 @@ import {
   initBus,
   closeBus,
   registerSession,
-  readMessages,
+  readPendingMessages,
+  deleteDeliveredMessage,
 } from "../src/bus.js";
 import {
   handleRegister,
@@ -143,10 +144,10 @@ describe("handleBroadcast", () => {
     expect(result.success).toBe(true);
     expect(result.recipientCount).toBe(1);
 
-    const senderMsgs = readMessages("id-sender");
+    const senderMsgs = readPendingMessages("id-sender");
     expect(senderMsgs).toHaveLength(0);
 
-    const receiverMsgs = readMessages("id-receiver");
+    const receiverMsgs = readPendingMessages("id-receiver");
     expect(receiverMsgs).toHaveLength(1);
     expect(receiverMsgs[0].from_session).toBe("sender");
   });

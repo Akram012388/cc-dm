@@ -1,6 +1,6 @@
 // MCP tool handlers: dm, who, register, broadcast
 
-import { writeMessage, readMessages, listActiveSessions, registerSession, findSessionsByName } from "./bus.js";
+import { writeMessage, listActiveSessions, registerSession, findSessionsByName, readPendingMessages } from "./bus.js";
 
 export type DmResult = {
   success: boolean;
@@ -143,20 +143,20 @@ if (import.meta.main) {
   initBus();
 
   const reg1 = handleRegister("id-planner", "planner", "orchestrator");
-  console.log("register planner:", reg1);
+  console.error("register planner:", reg1);
 
   const reg2 = handleRegister("id-backend", "backend", "worker");
-  console.log("register backend:", reg2);
+  console.error("register backend:", reg2);
 
   const dm = handleDm("planner", "backend", "scaffold the auth module");
-  console.log("dm planner→backend:", dm);
+  console.error("dm planner→backend:", dm);
 
   const bc = handleBroadcast("id-planner", "planner", "standup in 5");
-  console.log("broadcast from planner:", bc);
+  console.error("broadcast from planner:", bc);
 
   const who = handleWho();
-  console.log("who:", who);
+  console.error("who:", who);
 
-  const msgs = readMessages("id-backend");
-  console.log("backend messages:", msgs);
+  const msgs = readPendingMessages("id-backend");
+  console.error("backend messages:", msgs);
 }

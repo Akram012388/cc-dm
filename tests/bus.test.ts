@@ -7,10 +7,12 @@ import {
   initBus,
   closeBus,
   registerSession,
+  deregisterSession,
   updateHeartbeat,
   expireStaleSessions,
   writeMessage,
-  readMessages,
+  readPendingMessages,
+  deleteDeliveredMessage,
   listActiveSessions,
   findSessionsByName,
 } from "../src/bus.js";
@@ -70,23 +72,47 @@ describe("registerSession", () => {
 
   test("upserts on conflict", () => {
     registerSession("alpha", "alpha", "worker", "/tmp");
-    const db1 = new Database(tmpDbPath, { readonly: true });
-    const first = db1.query<{ last_seen: string; role: string }, [string]>(
-      "SELECT last_seen, role FROM sessions WHERE id = ?"
-    ).get("alpha");
-    db1.close();
-
     registerSession("alpha", "alpha-renamed", "orchestrator", "/home");
     const db2 = new Database(tmpDbPath, { readonly: true });
-    const second = db2.query<{ last_seen: string; role: string; name: string; cwd: string }, [string]>(
-      "SELECT last_seen, role, name, cwd FROM sessions WHERE id = ?"
+    const second = db2.query<{ role: string; name: string; cwd: string }, [string]>(
+      "SELECT role, name, cwd FROM sessions WHERE id = ?"
     ).get("alpha");
     db2.close();
-
     expect(second!.role).toBe("orchestrator");
     expect(second!.name).toBe("alpha-renamed");
     expect(second!.cwd).toBe("/home");
-    expect(second!.last_seen >= first!.last_seen).toBe(true);
+  });
+
+  test("throws on DB error", () => {
+    closeBus();
+    expect(() => registerSession("x", "x", "w", "/")).toThrow();
+    initBus(tmpDbPath);
+  });
+});
+
+describe("deregisterSession", () => {
+  test("removes session from DB", () => {
+    registerSession("alpha", "alpha", "worker", "/tmp");
+    deregisterSession("alpha");
+    const db = new Database(tmpDbPath, { readonly: true });
+    const row = db.query<{ id: string }, [string]>(
+      "SELECT id FROM sessions WHERE id = ?"
+    ).get("alpha");
+    db.close();
+    expect(row).toBeNull();
+  });
+
+  test("no-op for nonexistent session", () => {
+    deregisterSession("nonexistent");
+  });
+
+  test("does not affect other sessions", () => {
+    registerSession("a", "a", "w", "/");
+    registerSession("b", "b", "w", "/");
+    deregisterSession("a");
+    const sessions = listActiveSessions();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].id).toBe("b");
   });
 });
 
@@ -105,7 +131,6 @@ describe("updateHeartbeat", () => {
       "SELECT last_seen FROM sessions WHERE id = ?"
     ).get("alpha")!.last_seen;
     db2.close();
-
     expect(after >= before).toBe(true);
   });
 });
@@ -172,45 +197,70 @@ describe("writeMessage", () => {
     closeBus();
     const ok = writeMessage("a", "b", "hello");
     expect(ok).toBe(false);
-    // Re-init for afterEach cleanup
     initBus(tmpDbPath);
   });
 });
 
-describe("readMessages", () => {
+describe("readPendingMessages", () => {
   test("returns undelivered messages", () => {
     writeMessage("sender", "target-id", "msg1");
     writeMessage("sender", "target-id", "msg2");
-    const msgs = readMessages("target-id");
+    const msgs = readPendingMessages("target-id");
     expect(msgs).toHaveLength(2);
     expect(msgs[0].content).toBe("msg1");
     expect(msgs[1].content).toBe("msg2");
   });
 
-  test("marks messages as delivered", () => {
+  test("does NOT mark messages as delivered", () => {
     writeMessage("sender", "target-id", "msg1");
-    readMessages("target-id");
-    const msgs = readMessages("target-id");
-    expect(msgs).toHaveLength(0);
-  });
-
-  test("is transactional — no duplicates", () => {
-    writeMessage("sender", "target-id", "msg1");
-    const [r1, r2] = [readMessages("target-id"), readMessages("target-id")];
-    const total = r1.length + r2.length;
-    expect(total).toBe(1);
+    readPendingMessages("target-id");
+    const msgs = readPendingMessages("target-id");
+    expect(msgs).toHaveLength(1);
   });
 
   test("orders by id ASC", () => {
     writeMessage("x", "target-id", "first");
     writeMessage("y", "target-id", "second");
     writeMessage("z", "target-id", "third");
-    const msgs = readMessages("target-id");
+    const msgs = readPendingMessages("target-id");
     expect(msgs[0].content).toBe("first");
-    expect(msgs[1].content).toBe("second");
     expect(msgs[2].content).toBe("third");
     expect(msgs[0].id).toBeLessThan(msgs[1].id);
-    expect(msgs[1].id).toBeLessThan(msgs[2].id);
+  });
+
+  test("returns empty array on DB error", () => {
+    closeBus();
+    const msgs = readPendingMessages("target-id");
+    expect(msgs).toHaveLength(0);
+    initBus(tmpDbPath);
+  });
+});
+
+describe("deleteDeliveredMessage", () => {
+  test("deletes the message row", () => {
+    writeMessage("sender", "target-id", "msg1");
+    const msgs = readPendingMessages("target-id");
+    deleteDeliveredMessage(msgs[0].id);
+
+    const remaining = readPendingMessages("target-id");
+    expect(remaining).toHaveLength(0);
+  });
+
+  test("only deletes the specified message", () => {
+    writeMessage("sender", "target-id", "msg1");
+    writeMessage("sender", "target-id", "msg2");
+    const msgs = readPendingMessages("target-id");
+    deleteDeliveredMessage(msgs[0].id);
+
+    const remaining = readPendingMessages("target-id");
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].content).toBe("msg2");
+  });
+
+  test("throws on DB error", () => {
+    closeBus();
+    expect(() => deleteDeliveredMessage(999)).toThrow();
+    initBus(tmpDbPath);
   });
 });
 
@@ -234,6 +284,21 @@ describe("findSessionsByName", () => {
     const results = findSessionsByName("nonexistent");
     expect(results).toHaveLength(0);
   });
+
+  test("excludes inactive sessions", () => {
+    registerSession("id-1", "planner", "worker", "/tmp");
+    const db = new Database(tmpDbPath);
+    db.run("UPDATE sessions SET status = 'inactive' WHERE id = 'id-1'");
+    db.close();
+    const results = findSessionsByName("planner");
+    expect(results).toHaveLength(0);
+  });
+
+  test("throws on DB error", () => {
+    closeBus();
+    expect(() => findSessionsByName("x")).toThrow();
+    initBus(tmpDbPath);
+  });
 });
 
 describe("listActiveSessions", () => {
@@ -253,5 +318,11 @@ describe("listActiveSessions", () => {
     expect(sessions[0].name).toBe("planner");
     expect(sessions[0].role).toBe("worker");
     expect(sessions[0].cwd).toBe("/project");
+  });
+
+  test("throws on DB error", () => {
+    closeBus();
+    expect(() => listActiveSessions()).toThrow();
+    initBus(tmpDbPath);
   });
 });

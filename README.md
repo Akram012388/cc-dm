@@ -38,8 +38,8 @@ curl -fsSL https://raw.githubusercontent.com/Akram012388/cc-dm/main/install.sh |
 Start a session with cc-dm:
 
 ```bash
-CC_DM_SESSION_ID=planner CC_DM_SESSION_ROLE=orchestrator \
-claude --dangerously-load-development-channels server:cc-dm
+CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator \
+claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
 ```
 
 Once inside, use natural language:
@@ -58,12 +58,12 @@ Open two or more terminals and launch Claude Code with different session identit
 
 **Terminal 1 — Planner:**
 ```bash
-CC_DM_SESSION_ID=planner CC_DM_SESSION_ROLE=orchestrator claude --dangerously-load-development-channels server:cc-dm
+CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
 ```
 
 **Terminal 2 — Backend:**
 ```bash
-CC_DM_SESSION_ID=backend CC_DM_SESSION_ROLE=worker claude --dangerously-load-development-channels server:cc-dm
+CC_DM_SESSION_NAME=backend CC_DM_SESSION_ROLE=worker claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
 ```
 
 Or skip the env vars and register interactively using `/cc-dm:register` after launch.
@@ -74,10 +74,10 @@ Sessions can now message each other directly, broadcast to all, and coordinate w
 
 Set these environment variables before launching:
 
-- `CC_DM_SESSION_ID` — your session name (e.g. `planner`, `backend`, `tests`)
+- `CC_DM_SESSION_NAME` — your display name (e.g. `planner`, `backend`, `tests`)
 - `CC_DM_SESSION_ROLE` — your role (e.g. `orchestrator`, `worker`, `reviewer`)
 
-If not set, the session ID defaults to `session-<random hex>` and the role defaults to `worker`. Sessions send a heartbeat every 30 seconds. A session with no heartbeat for 60 seconds is automatically marked inactive and removed from the roster. No manual cleanup needed.
+If not set, Claude will ask you to register via the `/cc-dm:register` skill on first interaction. Each session gets an auto-generated internal ID (`session-<random hex>`) used for message routing. Sessions send a heartbeat every 30 seconds. A session with no heartbeat for 60 seconds is automatically deleted from the roster. Undelivered messages expire after 15 seconds. No manual cleanup needed.
 
 ## Remote access
 

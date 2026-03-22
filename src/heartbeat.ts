@@ -63,21 +63,21 @@ if (import.meta.main) {
   initBus();
   registerSession("heartbeat-test", "heartbeat-test", "worker", "/tmp");
   startHeartbeat("heartbeat-test");
-  console.log("Heartbeat started for heartbeat-test");
+  console.error("Heartbeat started for heartbeat-test");
 
   setTimeout(() => {
     const sessions = listActiveSessions();
-    console.log("Active sessions (2s):", sessions);
+    console.error("Active sessions (2s):", sessions);
   }, 2_000);
 
   setTimeout(() => {
     stopHeartbeat();
-    console.log("Heartbeat stopped");
+    console.error("Heartbeat stopped");
   }, 4_000);
 
   setTimeout(() => {
     const sessions = listActiveSessions();
-    console.log("Active sessions (5s):", sessions);
+    console.error("Active sessions (5s):", sessions);
   }, 5_000);
 
   setTimeout(() => {}, 6_000);

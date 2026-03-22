@@ -6,7 +6,7 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { initBus, readPendingMessages, markDelivered, deregisterSession } from "./bus.js";
+import { initBus, readPendingMessages, deleteDeliveredMessage, deregisterSession } from "./bus.js";
 import { handleDm, handleWho, handleRegister, handleBroadcast } from "./tools.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 
@@ -32,9 +32,17 @@ type ChannelNotification = {
   };
 };
 
-const registrationInstruction = (NAME_PROVIDED && ROLE_PROVIDED)
-  ? `Your session is registered as "${SESSION_NAME}" with role "${SESSION_ROLE}". Do NOT call register unless the user explicitly asks to change the name or role.`
-  : `Your session name${NAME_PROVIDED ? "" : " (not configured)"}${ROLE_PROVIDED ? "" : " and role (not configured)"} need${NAME_PROVIDED || ROLE_PROVIDED ? "s" : ""} to be set. On your first interaction, invoke the /cc-dm:register skill to ask the user for ${!NAME_PROVIDED && !ROLE_PROVIDED ? "their preferred session name and role" : !NAME_PROVIDED ? "their preferred session name" : "their preferred role"}. Do NOT guess or self-assign values.`;
+function buildRegistrationInstruction(): string {
+  if (NAME_PROVIDED && ROLE_PROVIDED) {
+    return `Your session is registered as "${SESSION_NAME}" with role "${SESSION_ROLE}". Do NOT call register unless the user explicitly asks to change the name or role.`;
+  }
+  const missing = [];
+  if (!NAME_PROVIDED) missing.push("session name");
+  if (!ROLE_PROVIDED) missing.push("role");
+  return `Your ${missing.join(" and ")} ${missing.length === 1 ? "has" : "have"} not been configured. On your first interaction, invoke the /cc-dm:register skill to ask the user for ${missing.length === 1 ? "it" : "both values"}. Do NOT guess or self-assign values.`;
+}
+
+const registrationInstruction = buildRegistrationInstruction();
 
 const server = new Server<never, ChannelNotification>(
   { name: "cc-dm", version: "1.0.0" },
@@ -43,7 +51,7 @@ const server = new Server<never, ChannelNotification>(
       experimental: { "claude/channel": {} },
       tools: {},
     },
-    instructions: `You are connected to cc-dm. Your session id is "${SESSION_ID}". ${registrationInstruction} Messages from other sessions arrive as <channel source="cc-dm" from_session="..." to_session="...">. Act on messages addressed to your session name or to_session="all". Available tools: register, dm, who, broadcast.`,
+    instructions: `You are connected to cc-dm. Your session id is "${SESSION_ID}". ${registrationInstruction} Messages from other sessions arrive as <channel source="cc-dm" from_session="..." to_session="...">. Act on messages addressed to your session name. Available tools: register, dm, who, broadcast.`,
   }
 );
 
@@ -152,7 +160,6 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-// Using notification() — sendNotification() not available in installed SDK version
 function startPollLoop(): void {
   pollTimer = setInterval(async () => {
     try {
@@ -160,22 +167,26 @@ function startPollLoop(): void {
       if (messages.length === 0) return;
 
       for (const message of messages) {
-        await server.notification({
-          method: "notifications/claude/channel",
-          params: {
-            content: message.content,
-            meta: {
-              from_session: message.from_session,
-              to_session: sessionName,
-              message_id: String(message.id),
-              sent_at: message.created_at,
+        try {
+          await server.notification({
+            method: "notifications/claude/channel",
+            params: {
+              content: message.content,
+              meta: {
+                from_session: message.from_session,
+                to_session: sessionName,
+                message_id: String(message.id),
+                sent_at: message.created_at,
+              },
             },
-          },
-        });
-        markDelivered(message.id);
+          });
+          deleteDeliveredMessage(message.id);
+        } catch (err) {
+          console.error(`[cc-dm/poll] failed to deliver message ${message.id}:`, err);
+        }
       }
     } catch (err) {
-      console.error("[cc-dm/poll] error:", err);
+      console.error("[cc-dm/poll] error reading messages:", err);
     }
   }, 500);
 }
