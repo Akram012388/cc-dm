@@ -236,7 +236,10 @@ function shutdown(): void {
 
 async function main(): Promise<void> {
   initBus();
-  handleRegister(SESSION_ID, SESSION_NAME, SESSION_ROLE, SESSION_PROJECT);
+  const initialReg = handleRegister(SESSION_ID, SESSION_NAME, SESSION_ROLE, SESSION_PROJECT);
+  if (!initialReg.success) {
+    console.error(`[cc-dm] initial registration failed: ${initialReg.error}`);
+  }
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
