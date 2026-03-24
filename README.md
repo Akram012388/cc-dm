@@ -98,9 +98,9 @@ Set these environment variables before launching:
 
 If not set, Claude will ask you to register via the `/cc-dm:register` skill on first interaction. Each session gets an auto-generated internal ID (`session-<random hex>`) used for message routing. Sessions send a heartbeat every 30 seconds. A session with no heartbeat for 60 seconds is automatically deleted from the roster. Undelivered messages expire after 15 seconds. No manual cleanup needed.
 
-## Project-scoped broadcasts
+## Project-scoped messaging
 
-When working across multiple projects or worktrees, broadcasts can be scoped to a project. Sessions with a `project` tag only broadcast to other sessions with the same tag. Sessions without a project broadcast to everyone (global, the default).
+When working across multiple projects or worktrees, both broadcasts and DMs can be scoped to a project. Sessions with a `project` tag can only message other sessions with the same tag. Sessions without a project can message anyone (global, the default).
 
 ```bash
 # Terminal 1 — frontend worker on myapp
@@ -138,7 +138,7 @@ bun -e "
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| [v1.1.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.1.0) | 2026-03-24 | Project-scoped broadcasts — tag sessions to a project, broadcasts stay within project |
+| [v1.1.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.1.0) | 2026-03-24 | Project-scoped messaging — tag sessions to a project, broadcasts and DMs stay within project |
 | [v1.0.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.0.0) | 2026-03-22 | Production release — duplicate delivery guard, same-name protection, stronger session IDs |
 | [v0.3.0](https://github.com/Akram012388/cc-dm/releases/tag/v0.3.0) | 2026-03-22 | Fix MCP server path resolution for plugin marketplace installs |
 | [v0.2.0](https://github.com/Akram012388/cc-dm/releases/tag/v0.2.0) | 2026-03-21 | 44-test suite, clean shutdown, bus hardening |

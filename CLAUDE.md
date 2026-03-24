@@ -78,7 +78,7 @@ MCP server config is inline in `.claude-plugin/plugin.json` (not a separate `.mc
 ## Testing
 
 ```bash
-bun test                   # 48+ unit + integration tests
+bun test                   # 88 unit + integration tests
 bun run typecheck          # must pass before any commit
 bun run src/bus.ts         # bus smoke test
 bun run src/tools.ts       # tools smoke test
