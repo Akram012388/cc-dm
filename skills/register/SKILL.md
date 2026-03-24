@@ -1,6 +1,6 @@
 ---
 name: register
-description: Register this session with cc-dm — sets your session name, role, and optional project. Auto-invoked on first interaction if session name or role is missing.
+description: Register this session with cc-dm — sets your session name, role, and optional project tag for project-scoped messaging. Auto-invoked on first interaction if session name or role is missing. Use when the user asks to register, set name, change role, or set/change project.
 ---
 
 # Register Session
@@ -30,6 +30,6 @@ Before prompting the user, determine if registration is needed:
 7. Wait for their response.
 8. Call the `register` tool with the provided `name`, `role`, and `project` (if given).
 9. If the tool returns an error about the name being in use, show the error and ask the user to pick another name.
-10. Confirm success: "Registered as **{name}** with role **{role}**." If a project was set, add: "Broadcasts scoped to project **{project}**."
+10. Confirm success: "Registered as **{name}** with role **{role}**." If a project was set, add: "Broadcasts and DMs scoped to project **{project}**."
 
 If registration fails for any other reason, report the error clearly.

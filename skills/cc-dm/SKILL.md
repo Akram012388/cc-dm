@@ -1,6 +1,6 @@
 ---
 name: cc-dm
-description: Send and receive direct messages between active Claude Code sessions on this machine. Use when the user asks to dm, message, notify, broadcast, or check who is active across sessions.
+description: Send and receive direct messages between active Claude Code sessions on this machine. Use when the user asks to dm, message, notify, broadcast, check who is active, or manage project-scoped messaging across sessions.
 ---
 
 # cc-dm — Claude Code Direct Message
@@ -15,7 +15,7 @@ Session registration is handled automatically from environment variables
 (CC_DM_SESSION_NAME, CC_DM_SESSION_ROLE, CC_DM_SESSION_PROJECT). Check
 the MCP instructions to see if name, role, and project are already configured:
 
-- **Both configured:** Do nothing. Registration is complete.
+- **Name and role configured:** Do nothing. Registration is complete.
 - **Either missing:** Invoke the /cc-dm:register skill on first interaction
   to ask the user for the missing value(s). Never guess or self-assign.
 
@@ -26,6 +26,8 @@ When the user says "dm [session] [message]" or "tell [session] [message]":
   Use the dm tool.
   Example: dm(to="backend", content="auth spec is ready")
 
+If this session has a project tag set, DMs can only reach sessions in the
+same project. A DM to a session outside the project will return an error.
 The message is delivered to the target session within 500ms.
 You do not need to wait for a reply — continue your work.
 
