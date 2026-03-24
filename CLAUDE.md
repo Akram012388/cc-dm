@@ -22,7 +22,7 @@ src/heartbeat.ts                 30s heartbeat writer, 60s session expiry + 15s 
 src/server.ts                    MCP entry point, claude/channel capability, poll loop, shutdown
 skills/cc-dm/SKILL.md            Skill for natural language usage
 skills/register/SKILL.md         Interactive session registration skill
-tests/                           Unit + integration tests (48+ tests, bun:test)
+tests/                           Unit + integration tests (82 tests, bun:test)
 CHANGELOG.md                     Version history
 LICENSE                          MIT license
 install.sh                       curl | bash installer

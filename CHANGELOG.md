@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `project` column on sessions table with automatic schema migration for existing DBs
 - `CC_DM_SESSION_PROJECT` env var for pre-configuring project at launch
 - Register skill now asks for project tag and shows active project tags for convenience
-- 11 new tests covering project-scoped broadcast isolation, global fallback, and registration
+- 18 new tests covering project-scoped broadcast isolation, global fallback, registration, migration, and edge cases (82 total)
 
 ### Changed
 - `handleRegister` accepts optional `project` parameter
