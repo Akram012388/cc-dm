@@ -82,6 +82,21 @@ describe("handleRegister", () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain("project must be 64 chars");
   });
+
+  test("error results include empty project field", () => {
+    const emptyName = handleRegister("id", "", "worker", "myapp");
+    expect(emptyName.project).toBe("");
+
+    const emptyRole = handleRegister("id", "name", "", "myapp");
+    expect(emptyRole.project).toBe("");
+  });
+
+  test("empty string project treated same as omitted", () => {
+    const omitted = handleRegister("id-1", "alice", "worker");
+    const empty = handleRegister("id-2", "bob", "worker", "");
+    expect(omitted.project).toBe("");
+    expect(empty.project).toBe("");
+  });
 });
 
 describe("handleDm", () => {
@@ -226,6 +241,26 @@ describe("handleBroadcast", () => {
 
     expect(readPendingMessages("id-b")).toHaveLength(1);
     expect(readPendingMessages("id-c")).toHaveLength(1);
+  });
+
+  test("default senderProject parameter broadcasts globally", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp", "other");
+
+    // Call without 4th argument — should default to global
+    const result = handleBroadcast("id-a", "alice", "hello");
+    expect(result.success).toBe(true);
+    expect(result.recipientCount).toBe(1);
+    expect(readPendingMessages("id-b")).toHaveLength(1);
+  });
+
+  test("project-scoped broadcast with no same-project peers returns zero recipients", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp", "other");
+
+    const result = handleBroadcast("id-a", "alice", "anyone here?", "myapp");
+    expect(result.success).toBe(true);
+    expect(result.recipientCount).toBe(0);
   });
 
   test("project-scoped broadcast does NOT reach sessions with no project", () => {

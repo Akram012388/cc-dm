@@ -257,4 +257,16 @@ describe("integration", () => {
     expect(alice.project).toBe("myapp");
     expect(bob.project).toBe("");
   });
+
+  test("DMs work across project boundaries", () => {
+    handleRegister("id-fe", "frontend", "worker", "myapp");
+    handleRegister("id-be", "backend", "worker", "api-server");
+
+    const dm = handleDm("frontend", "backend", "need your API schema");
+    expect(dm.success).toBe(true);
+
+    const msgs = readPendingMessages("id-be");
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].content).toBe("need your API schema");
+  });
 });
