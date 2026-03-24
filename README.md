@@ -98,6 +98,8 @@ Set these environment variables before launching:
 
 If not set, Claude will ask you to register via the `/cc-dm:register` skill on first interaction. Each session gets an auto-generated internal ID (`session-<random hex>`) used for message routing. Sessions send a heartbeat every 30 seconds. A session with no heartbeat for 60 seconds is automatically deleted from the roster. Undelivered messages expire after 15 seconds. No manual cleanup needed.
 
+> **Recommended naming convention:** Use `[project]-[name]` for session names, e.g. `myapp-planner`, `myapp-backend`, `myapp-tests`. Keep the prefix consistent across all workers in the same project and ensure it matches the `CC_DM_SESSION_PROJECT` value. This makes `who` output immediately scannable and helps Claude associate sessions with their project context at a glance.
+
 ## Project-scoped messaging
 
 When working across multiple projects or worktrees, both broadcasts and DMs can be scoped to a project. Sessions with a `project` tag can only message other sessions with the same tag. Sessions without a project can message anyone (global, the default).
