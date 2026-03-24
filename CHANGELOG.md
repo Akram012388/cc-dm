@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `listActiveSessions` and `handleWho` return `project` field
 - `register` tool schema includes optional `project` input
 - `broadcast` tool description updated to mention project scoping
+- Committed `bun.lock` (text format) for reproducible installs; `bun.lockb` (binary) remains gitignored
 
 ## [1.0.0] - 2026-03-22
 
