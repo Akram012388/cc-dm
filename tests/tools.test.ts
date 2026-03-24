@@ -227,4 +227,14 @@ describe("handleBroadcast", () => {
     expect(readPendingMessages("id-b")).toHaveLength(1);
     expect(readPendingMessages("id-c")).toHaveLength(1);
   });
+
+  test("project-scoped broadcast does NOT reach sessions with no project", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp");
+
+    const result = handleBroadcast("id-a", "alice", "myapp only", "myapp");
+    expect(result.success).toBe(true);
+    expect(result.recipientCount).toBe(0);
+    expect(readPendingMessages("id-b")).toHaveLength(0);
+  });
 });
