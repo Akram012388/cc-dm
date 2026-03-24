@@ -4,6 +4,22 @@ All notable changes to cc-dm will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.1.0] - 2026-03-24
+
+### Added
+- Project-scoped broadcasts — sessions can set an optional `project` tag during registration; broadcasts from a session with a project tag only reach sessions with the same tag
+- `project` column on sessions table with automatic schema migration for existing DBs
+- `CC_DM_SESSION_PROJECT` env var for pre-configuring project at launch
+- Register skill now asks for project tag and shows active project tags for convenience
+- 11 new tests covering project-scoped broadcast isolation, global fallback, and registration
+
+### Changed
+- `handleRegister` accepts optional `project` parameter
+- `handleBroadcast` filters recipients by sender's project tag when set
+- `listActiveSessions` and `handleWho` return `project` field
+- `register` tool schema includes optional `project` input
+- `broadcast` tool description updated to mention project scoping
+
 ## [1.0.0] - 2026-03-22
 
 ### Changed
