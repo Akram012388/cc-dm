@@ -215,4 +215,46 @@ describe("integration", () => {
     expect(r2.success).toBe(true);
     expect(r2.role).toBe("reviewer");
   });
+
+  test("project-scoped broadcast isolation", () => {
+    handleRegister("id-fe1", "frontend-1", "worker", "myapp");
+    handleRegister("id-fe2", "frontend-2", "worker", "myapp");
+    handleRegister("id-be1", "backend-1", "worker", "api-server");
+
+    // frontend-1 broadcasts within myapp
+    const bc = handleBroadcast("id-fe1", "frontend-1", "ui ready", "myapp");
+    expect(bc.success).toBe(true);
+    expect(bc.recipientCount).toBe(1);
+
+    // frontend-2 gets it
+    expect(readPendingMessages("id-fe2")).toHaveLength(1);
+    // backend-1 does NOT
+    expect(readPendingMessages("id-be1")).toHaveLength(0);
+  });
+
+  test("global broadcast reaches all projects", () => {
+    handleRegister("id-mgr", "manager", "orchestrator");
+    handleRegister("id-fe", "frontend", "worker", "myapp");
+    handleRegister("id-be", "backend", "worker", "api-server");
+
+    // manager has no project → global broadcast
+    const bc = handleBroadcast("id-mgr", "manager", "standup in 5", "");
+    expect(bc.success).toBe(true);
+    expect(bc.recipientCount).toBe(2);
+
+    expect(readPendingMessages("id-fe")).toHaveLength(1);
+    expect(readPendingMessages("id-be")).toHaveLength(1);
+  });
+
+  test("who shows project field", () => {
+    handleRegister("id-a", "alice", "worker", "myapp");
+    handleRegister("id-b", "bob", "worker");
+
+    const who = handleWho();
+    const alice = who.sessions.find((s) => s.name === "alice")!;
+    const bob = who.sessions.find((s) => s.name === "bob")!;
+
+    expect(alice.project).toBe("myapp");
+    expect(bob.project).toBe("");
+  });
 });

@@ -26,7 +26,12 @@ const SESSION_ROLE = sanitize(
   process.env.CC_DM_SESSION_ROLE?.trim() || "worker"
 );
 
+const SESSION_PROJECT = sanitize(
+  process.env.CC_DM_SESSION_PROJECT?.trim() || ""
+);
+
 let sessionName = SESSION_NAME;
+let sessionProject = SESSION_PROJECT;
 
 type ChannelNotification = {
   method: "notifications/claude/channel";
@@ -63,7 +68,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "register",
-      description: "Register this session with a display name and role in cc-dm",
+      description: "Register this session with a display name, role, and optional project in cc-dm",
       inputSchema: {
         type: "object" as const,
         properties: {
@@ -74,6 +79,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           role: {
             type: "string",
             description: "Role description e.g. orchestrator, worker, reviewer",
+          },
+          project: {
+            type: "string",
+            description: "Project tag for this session e.g. myapp, api-server. If set, broadcasts are scoped to sessions with the same project tag.",
           },
         },
         required: ["name", "role"],
@@ -108,7 +117,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "broadcast",
-      description: "Broadcast a message to all active sessions",
+      description: "Broadcast a message to active sessions. If this session has a project set, only sessions in the same project receive the message.",
       inputSchema: {
         type: "object" as const,
         properties: {
@@ -129,11 +138,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const result = handleRegister(
         SESSION_ID,
         String(req.params.arguments?.name ?? ""),
-        String(req.params.arguments?.role ?? "")
+        String(req.params.arguments?.role ?? ""),
+        String(req.params.arguments?.project ?? "")
       );
       if (result.success) {
         sessionName = result.name;
-        console.error(`cc-dm session name updated to "${sessionName}"`);
+        sessionProject = result.project;
+        console.error(`cc-dm session registered as "${sessionName}" project="${sessionProject}"`);
       }
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     }
@@ -153,7 +164,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const result = handleBroadcast(
         SESSION_ID,
         sessionName,
-        String(req.params.arguments?.content ?? "")
+        String(req.params.arguments?.content ?? ""),
+        sessionProject
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     }
@@ -219,7 +231,7 @@ function shutdown(): void {
 
 async function main(): Promise<void> {
   initBus();
-  handleRegister(SESSION_ID, SESSION_NAME, SESSION_ROLE);
+  handleRegister(SESSION_ID, SESSION_NAME, SESSION_ROLE, SESSION_PROJECT);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -233,7 +245,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", shutdown);
   process.stdin.on("end", shutdown);
 
-  console.error(`cc-dm session "${SESSION_NAME}" [${SESSION_ID}] (${SESSION_ROLE}) started`);
+  console.error(`cc-dm session "${SESSION_NAME}" [${SESSION_ID}] (${SESSION_ROLE}) project="${SESSION_PROJECT}" started`);
   console.error(`Bus: ~/.cc-dm/bus.db`);
   console.error(`Poll: 500ms`);
 }

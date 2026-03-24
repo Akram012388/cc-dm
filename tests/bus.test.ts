@@ -83,6 +83,37 @@ describe("registerSession", () => {
     expect(second!.cwd).toBe("/home");
   });
 
+  test("stores project field", () => {
+    registerSession("alpha", "alpha-name", "worker", "/tmp", "myapp");
+    const db = new Database(tmpDbPath, { readonly: true });
+    const row = db.query<{ project: string }, [string]>(
+      "SELECT project FROM sessions WHERE id = ?"
+    ).get("alpha");
+    db.close();
+    expect(row!.project).toBe("myapp");
+  });
+
+  test("defaults project to empty string", () => {
+    registerSession("alpha", "alpha-name", "worker", "/tmp");
+    const db = new Database(tmpDbPath, { readonly: true });
+    const row = db.query<{ project: string }, [string]>(
+      "SELECT project FROM sessions WHERE id = ?"
+    ).get("alpha");
+    db.close();
+    expect(row!.project).toBe("");
+  });
+
+  test("upserts project on conflict", () => {
+    registerSession("alpha", "alpha", "worker", "/tmp", "old-project");
+    registerSession("alpha", "alpha", "worker", "/tmp", "new-project");
+    const db = new Database(tmpDbPath, { readonly: true });
+    const row = db.query<{ project: string }, [string]>(
+      "SELECT project FROM sessions WHERE id = ?"
+    ).get("alpha");
+    db.close();
+    expect(row!.project).toBe("new-project");
+  });
+
   test("throws on DB error", () => {
     closeBus();
     expect(() => registerSession("x", "x", "w", "/")).toThrow();
@@ -303,7 +334,7 @@ describe("findSessionsByName", () => {
 
 describe("listActiveSessions", () => {
   test("returns only active sessions with all fields", () => {
-    registerSession("active-one", "planner", "worker", "/project");
+    registerSession("active-one", "planner", "worker", "/project", "myapp");
     const old = new Date(Date.now() - 120_000).toISOString();
     const db = new Database(tmpDbPath);
     db.run(
@@ -318,6 +349,7 @@ describe("listActiveSessions", () => {
     expect(sessions[0].name).toBe("planner");
     expect(sessions[0].role).toBe("worker");
     expect(sessions[0].cwd).toBe("/project");
+    expect(sessions[0].project).toBe("myapp");
   });
 
   test("throws on DB error", () => {

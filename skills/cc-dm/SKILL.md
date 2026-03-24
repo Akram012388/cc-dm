@@ -49,6 +49,10 @@ When the user says "broadcast [message]" or "tell all sessions [message]":
   Use the broadcast tool.
   Example: broadcast(content="wrapping up in 10 minutes")
 
+If this session has a project tag set, broadcasts are automatically scoped
+to sessions with the same project tag. Sessions without a project tag
+broadcast to all active sessions.
+
 ## Checking who is online
 
 When the user asks "who is active" or "who is online" or "list sessions":

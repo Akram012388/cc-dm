@@ -62,6 +62,25 @@ describe("handleRegister", () => {
     expect(result.sessionId).toBe("test-id");
     expect(result.name).toBe("planner");
     expect(result.role).toBe("orchestrator");
+    expect(result.project).toBe("");
+  });
+
+  test("accepts optional project", () => {
+    const result = handleRegister("test-id", "planner", "orchestrator", "myapp");
+    expect(result.success).toBe(true);
+    expect(result.project).toBe("myapp");
+  });
+
+  test("sanitizes project", () => {
+    const result = handleRegister("test-id", "planner", "orchestrator", "  MY App  ");
+    expect(result.success).toBe(true);
+    expect(result.project).toBe("my-app");
+  });
+
+  test("validates >64 char project", () => {
+    const result = handleRegister("test-id", "planner", "worker", "a".repeat(65));
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("project must be 64 chars");
   });
 });
 
@@ -173,5 +192,39 @@ describe("handleBroadcast", () => {
     const result = handleBroadcast("id-sender", "sender", "");
     expect(result.success).toBe(false);
     expect(result.error).toContain("content is required");
+  });
+
+  test("project-scoped broadcast only reaches same-project sessions", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp", "myapp");
+    registerSession("id-c", "charlie", "worker", "/tmp", "other");
+    registerSession("id-d", "dave", "worker", "/tmp");
+
+    const result = handleBroadcast("id-a", "alice", "myapp update", "myapp");
+    expect(result.success).toBe(true);
+    expect(result.recipientCount).toBe(1); // only bob
+
+    const bobMsgs = readPendingMessages("id-b");
+    expect(bobMsgs).toHaveLength(1);
+    expect(bobMsgs[0].content).toBe("myapp update");
+
+    const charlieMsgs = readPendingMessages("id-c");
+    expect(charlieMsgs).toHaveLength(0);
+
+    const daveMsgs = readPendingMessages("id-d");
+    expect(daveMsgs).toHaveLength(0);
+  });
+
+  test("global broadcast (no project) reaches all sessions", () => {
+    registerSession("id-a", "alice", "worker", "/tmp");
+    registerSession("id-b", "bob", "worker", "/tmp", "myapp");
+    registerSession("id-c", "charlie", "worker", "/tmp", "other");
+
+    const result = handleBroadcast("id-a", "alice", "hello everyone", "");
+    expect(result.success).toBe(true);
+    expect(result.recipientCount).toBe(2);
+
+    expect(readPendingMessages("id-b")).toHaveLength(1);
+    expect(readPendingMessages("id-c")).toHaveLength(1);
   });
 });
