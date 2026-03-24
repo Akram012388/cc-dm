@@ -27,7 +27,18 @@ Each session spawns a cc-dm channel server via stdio. The server connects to a s
 - **Bun** runtime ([bun.sh](https://bun.sh))
 - **macOS** — primary supported platform
 
-## Install
+## Quick Start
+
+Start a new Claude Code session and enter the following commands:
+
+```
+/plugin marketplace add cc-dm-marketplace
+/plugin install cc-dm
+```
+
+Restart Claude Code. The cc-dm tools and skills will be available in all sessions.
+
+## Install (alternative)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Akram012388/cc-dm/main/install.sh | bash
