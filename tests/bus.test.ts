@@ -52,6 +52,57 @@ describe("initBus", () => {
     closeBus();
     expect(() => initBus("/nonexistent/deeply/nested/path/bus.db")).toThrow();
   });
+
+  test("migrates existing DB without project column", () => {
+    closeBus();
+    const migrationDb = tmpDb();
+    // Create a DB with the old schema (no project column)
+    const oldDb = new Database(migrationDb, { create: true });
+    oldDb.run(`CREATE TABLE sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL DEFAULT '',
+      role TEXT NOT NULL DEFAULT 'worker',
+      cwd TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'active',
+      last_seen TEXT NOT NULL,
+      registered_at TEXT NOT NULL
+    )`);
+    oldDb.run(`CREATE TABLE messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_session TEXT NOT NULL,
+      to_session TEXT NOT NULL,
+      content TEXT NOT NULL,
+      delivered INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )`);
+    const now = new Date().toISOString();
+    oldDb.run(
+      "INSERT INTO sessions VALUES (?, ?, ?, ?, 'active', ?, ?)",
+      ["old-id", "old-name", "worker", "/tmp", now, now]
+    );
+    oldDb.close();
+
+    // Re-init should migrate without error
+    initBus(migrationDb);
+
+    // Old row should have project = ''
+    const sessions = listActiveSessions();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].project).toBe("");
+
+    // New registration with project should work
+    registerSession("new-id", "new-name", "worker", "/tmp", "myapp");
+    const all = listActiveSessions();
+    const newSession = all.find(s => s.id === "new-id")!;
+    expect(newSession.project).toBe("myapp");
+
+    closeBus();
+    for (const suffix of ["", "-wal", "-shm"]) {
+      const f = migrationDb + suffix;
+      if (existsSync(f)) unlinkSync(f);
+    }
+    initBus(tmpDbPath);
+  });
 });
 
 describe("registerSession", () => {
