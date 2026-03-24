@@ -65,6 +65,7 @@ export function handleRegister(sessionId: string, name: string, role: string, pr
     registerSession(sessionId, cleanName, cleanRole, cwd, cleanProject);
     return { success: true, sessionId, name: cleanName, role: cleanRole, project: cleanProject };
   } catch (err) {
+    console.error("[cc-dm/tools] handleRegister failed:", err);
     return { success: false, sessionId: "", name: "", role: "", project: "", error: String(err) };
   }
 }
@@ -102,6 +103,7 @@ export function handleDm(fromName: string, to: string, content: string): DmResul
     }
     return { success: true, to: cleanTo };
   } catch (err) {
+    console.error("[cc-dm/tools] handleDm failed:", err);
     return { success: false, to: "", error: String(err) };
   }
 }
@@ -154,6 +156,7 @@ export function handleBroadcast(fromId: string, fromName: string, content: strin
     }
     return { success: true, from: fromName, recipientCount: recipients.length };
   } catch (err) {
+    console.error("[cc-dm/tools] handleBroadcast failed:", err);
     return { success: false, from: "", recipientCount: 0, error: String(err) };
   }
 }
