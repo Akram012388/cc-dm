@@ -22,7 +22,7 @@ src/heartbeat.ts                 30s heartbeat writer, 60s session expiry + 15s 
 src/server.ts                    MCP entry point, claude/channel capability, poll loop, shutdown
 skills/cc-dm/SKILL.md            Skill for natural language usage
 skills/register/SKILL.md         Interactive session registration skill
-tests/                           Unit + integration tests (48+ tests, bun:test)
+tests/                           Unit + integration tests (88 tests, bun:test)
 CHANGELOG.md                     Version history
 LICENSE                          MIT license
 install.sh                       curl | bash installer
@@ -44,7 +44,9 @@ Broadcast writes one row per recipient with their specific session ID as `to_ses
 
 All logging via `console.error` — stdout is reserved for MCP stdio protocol.
 
-Session identity: `id` is always auto-generated as `session-<12 hex chars>` using `crypto.randomUUID()`. Display `name` comes from `CC_DM_SESSION_NAME` env var (falls back to `CC_DM_SESSION_ID` for backward compat, then to the auto-generated id). All names are sanitized (lowercase, trimmed, spaces→hyphens) at both server startup and tool invocation. `role` comes from `CC_DM_SESSION_ROLE` (defaults to `worker`). `cwd` is captured from `process.cwd()` at registration. Session names are unique — `handleRegister` rejects names already taken by a different session ID.
+Session identity: `id` is always auto-generated as `session-<12 hex chars>` using `crypto.randomUUID()`. Display `name` comes from `CC_DM_SESSION_NAME` env var (falls back to `CC_DM_SESSION_ID` for backward compat, then to the auto-generated id). All names and project tags are sanitized (lowercase, trimmed, spaces→hyphens) at both server startup and tool invocation. `role` comes from `CC_DM_SESSION_ROLE` (defaults to `worker`). `project` comes from `CC_DM_SESSION_PROJECT` (defaults to `''`). `cwd` is captured from `process.cwd()` at registration. Session names are unique — `handleRegister` rejects names already taken by a different session ID.
+
+Project-scoped messaging: If a session has a non-empty `project` tag, both `handleBroadcast` and `handleDm` only deliver messages to sessions with the same `project` value. Sessions without a project (empty string) can broadcast and DM any active session — the original global behavior. This is sender-side filtering only; no receive-side filtering is needed because message rows are never written for out-of-scope recipients.
 
 **Important:** The `from_session` column in the `messages` table stores the sender's **display name**, not their session ID. This is a historical naming choice. Do not JOIN `messages.from_session` against `sessions.id` — they are different namespaces.
 
@@ -76,7 +78,7 @@ MCP server config is inline in `.claude-plugin/plugin.json` (not a separate `.mc
 ## Testing
 
 ```bash
-bun test                   # 48+ unit + integration tests
+bun test                   # 88 unit + integration tests
 bun run typecheck          # must pass before any commit
 bun run src/bus.ts         # bus smoke test
 bun run src/tools.ts       # tools smoke test

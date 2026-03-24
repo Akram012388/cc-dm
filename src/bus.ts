@@ -48,6 +48,11 @@ export function initBus(dbPath?: string): void {
     } catch (err) {
       if (!(err instanceof Error && err.message.includes("duplicate column"))) throw err;
     }
+    try {
+      db.run(`ALTER TABLE sessions ADD COLUMN project TEXT NOT NULL DEFAULT ''`);
+    } catch (err) {
+      if (!(err instanceof Error && err.message.includes("duplicate column"))) throw err;
+    }
 
     db.run(`
       CREATE TABLE IF NOT EXISTS messages (
@@ -77,18 +82,19 @@ export function closeBus(): void {
 }
 
 // Throws on failure so callers (handleRegister) can report accurate success/failure.
-export function registerSession(sessionId: string, name: string, role: string, cwd: string): void {
+export function registerSession(sessionId: string, name: string, role: string, cwd: string, project: string = ""): void {
   const now = new Date().toISOString();
   db.run(
-    `INSERT INTO sessions (id, name, role, cwd, status, last_seen, registered_at)
-     VALUES (?, ?, ?, ?, 'active', ?, ?)
+    `INSERT INTO sessions (id, name, role, cwd, project, status, last_seen, registered_at)
+     VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name,
        role = excluded.role,
        cwd = excluded.cwd,
+       project = excluded.project,
        status = 'active',
        last_seen = excluded.last_seen`,
-    [sessionId, name, role, cwd, now, now]
+    [sessionId, name, role, cwd, project, now, now]
   );
 }
 
@@ -170,17 +176,17 @@ export function deleteDeliveredMessage(messageId: number): void {
 }
 
 // Throws on failure so handleDm can report accurate errors.
-export function findSessionsByName(name: string): Array<{ id: string; name: string; role: string }> {
-  return db.query<{ id: string; name: string; role: string }, [string]>(
-    `SELECT id, name, role FROM sessions
+export function findSessionsByName(name: string): Array<{ id: string; name: string; role: string; project: string }> {
+  return db.query<{ id: string; name: string; role: string; project: string }, [string]>(
+    `SELECT id, name, role, project FROM sessions
      WHERE name = ? AND status = 'active'`
   ).all(name);
 }
 
 // Throws on failure so handleWho/handleBroadcast can report accurate errors.
-export function listActiveSessions(): Array<{ id: string; name: string; role: string; cwd: string; last_seen: string }> {
-  return db.query<{ id: string; name: string; role: string; cwd: string; last_seen: string }, []>(
-    `SELECT id, name, role, cwd, last_seen FROM sessions
+export function listActiveSessions(): Array<{ id: string; name: string; role: string; cwd: string; project: string; last_seen: string }> {
+  return db.query<{ id: string; name: string; role: string; cwd: string; project: string; last_seen: string }, []>(
+    `SELECT id, name, role, cwd, project, last_seen FROM sessions
      WHERE status = 'active'
      ORDER BY registered_at ASC`
   ).all();
@@ -189,7 +195,7 @@ export function listActiveSessions(): Array<{ id: string; name: string; role: st
 // Smoke test — only runs when executed directly: bun run src/bus.ts
 if (import.meta.main) {
   initBus();
-  registerSession("test-id", "test-session", "worker", "/tmp");
+  registerSession("test-id", "test-session", "worker", "/tmp", "demo");
   writeMessage("test-session", "test-id", "hello from smoke test");
   const msgs = readPendingMessages("test-id");
   console.error("messages:", msgs);

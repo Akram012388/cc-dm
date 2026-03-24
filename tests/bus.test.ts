@@ -52,6 +52,57 @@ describe("initBus", () => {
     closeBus();
     expect(() => initBus("/nonexistent/deeply/nested/path/bus.db")).toThrow();
   });
+
+  test("migrates existing DB without project column", () => {
+    closeBus();
+    const migrationDb = tmpDb();
+    // Create a DB with the old schema (no project column)
+    const oldDb = new Database(migrationDb, { create: true });
+    oldDb.run(`CREATE TABLE sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL DEFAULT '',
+      role TEXT NOT NULL DEFAULT 'worker',
+      cwd TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'active',
+      last_seen TEXT NOT NULL,
+      registered_at TEXT NOT NULL
+    )`);
+    oldDb.run(`CREATE TABLE messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_session TEXT NOT NULL,
+      to_session TEXT NOT NULL,
+      content TEXT NOT NULL,
+      delivered INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )`);
+    const now = new Date().toISOString();
+    oldDb.run(
+      "INSERT INTO sessions VALUES (?, ?, ?, ?, 'active', ?, ?)",
+      ["old-id", "old-name", "worker", "/tmp", now, now]
+    );
+    oldDb.close();
+
+    // Re-init should migrate without error
+    initBus(migrationDb);
+
+    // Old row should have project = ''
+    const sessions = listActiveSessions();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].project).toBe("");
+
+    // New registration with project should work
+    registerSession("new-id", "new-name", "worker", "/tmp", "myapp");
+    const all = listActiveSessions();
+    const newSession = all.find(s => s.id === "new-id")!;
+    expect(newSession.project).toBe("myapp");
+
+    closeBus();
+    for (const suffix of ["", "-wal", "-shm"]) {
+      const f = migrationDb + suffix;
+      if (existsSync(f)) unlinkSync(f);
+    }
+    initBus(tmpDbPath);
+  });
 });
 
 describe("registerSession", () => {
@@ -81,6 +132,37 @@ describe("registerSession", () => {
     expect(second!.role).toBe("orchestrator");
     expect(second!.name).toBe("alpha-renamed");
     expect(second!.cwd).toBe("/home");
+  });
+
+  test("stores project field", () => {
+    registerSession("alpha", "alpha-name", "worker", "/tmp", "myapp");
+    const db = new Database(tmpDbPath, { readonly: true });
+    const row = db.query<{ project: string }, [string]>(
+      "SELECT project FROM sessions WHERE id = ?"
+    ).get("alpha");
+    db.close();
+    expect(row!.project).toBe("myapp");
+  });
+
+  test("defaults project to empty string", () => {
+    registerSession("alpha", "alpha-name", "worker", "/tmp");
+    const db = new Database(tmpDbPath, { readonly: true });
+    const row = db.query<{ project: string }, [string]>(
+      "SELECT project FROM sessions WHERE id = ?"
+    ).get("alpha");
+    db.close();
+    expect(row!.project).toBe("");
+  });
+
+  test("upserts project on conflict", () => {
+    registerSession("alpha", "alpha", "worker", "/tmp", "old-project");
+    registerSession("alpha", "alpha", "worker", "/tmp", "new-project");
+    const db = new Database(tmpDbPath, { readonly: true });
+    const row = db.query<{ project: string }, [string]>(
+      "SELECT project FROM sessions WHERE id = ?"
+    ).get("alpha");
+    db.close();
+    expect(row!.project).toBe("new-project");
   });
 
   test("throws on DB error", () => {
@@ -265,12 +347,13 @@ describe("deleteDeliveredMessage", () => {
 });
 
 describe("findSessionsByName", () => {
-  test("finds sessions by name", () => {
-    registerSession("id-1", "planner", "worker", "/tmp");
+  test("finds sessions by name with project field", () => {
+    registerSession("id-1", "planner", "worker", "/tmp", "myapp");
     const results = findSessionsByName("planner");
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe("id-1");
     expect(results[0].name).toBe("planner");
+    expect(results[0].project).toBe("myapp");
   });
 
   test("returns multiple matches for same name", () => {
@@ -303,7 +386,7 @@ describe("findSessionsByName", () => {
 
 describe("listActiveSessions", () => {
   test("returns only active sessions with all fields", () => {
-    registerSession("active-one", "planner", "worker", "/project");
+    registerSession("active-one", "planner", "worker", "/project", "myapp");
     const old = new Date(Date.now() - 120_000).toISOString();
     const db = new Database(tmpDbPath);
     db.run(
@@ -318,6 +401,7 @@ describe("listActiveSessions", () => {
     expect(sessions[0].name).toBe("planner");
     expect(sessions[0].role).toBe("worker");
     expect(sessions[0].cwd).toBe("/project");
+    expect(sessions[0].project).toBe("myapp");
   });
 
   test("throws on DB error", () => {

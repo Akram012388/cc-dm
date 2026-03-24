@@ -1,4 +1,6 @@
 node_modules/
+# bun.lock (text format) is committed for reproducible installs.
+# bun.lockb (legacy binary format) is not used.
 bun.lockb
 dist/
 .env

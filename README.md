@@ -44,7 +44,7 @@ alias cc-dm='claude --dangerously-skip-permissions --dangerously-load-developmen
 Then launch sessions with:
 
 ```bash
-CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator cc-dm
+CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator CC_DM_SESSION_PROJECT=myapp cc-dm
 ```
 
 Or just `cc-dm` and register interactively via `/cc-dm:register`.
@@ -56,7 +56,7 @@ Or just `cc-dm` and register interactively via `/cc-dm:register`.
 Start a session without the alias:
 
 ```bash
-CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator \
+CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator CC_DM_SESSION_PROJECT=myapp \
 claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
 ```
 
@@ -76,12 +76,12 @@ Open two or more terminals and launch Claude Code with different session identit
 
 **Terminal 1 — Planner:**
 ```bash
-CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
+CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator CC_DM_SESSION_PROJECT=myapp claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
 ```
 
 **Terminal 2 — Backend:**
 ```bash
-CC_DM_SESSION_NAME=backend CC_DM_SESSION_ROLE=worker claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
+CC_DM_SESSION_NAME=backend CC_DM_SESSION_ROLE=worker CC_DM_SESSION_PROJECT=myapp claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
 ```
 
 Or skip the env vars and register interactively using `/cc-dm:register` after launch.
@@ -94,8 +94,32 @@ Set these environment variables before launching:
 
 - `CC_DM_SESSION_NAME` — your display name (e.g. `planner`, `backend`, `tests`)
 - `CC_DM_SESSION_ROLE` — your role (e.g. `orchestrator`, `worker`, `reviewer`)
+- `CC_DM_SESSION_PROJECT` — optional project tag (e.g. `myapp`, `api-server`)
 
 If not set, Claude will ask you to register via the `/cc-dm:register` skill on first interaction. Each session gets an auto-generated internal ID (`session-<random hex>`) used for message routing. Sessions send a heartbeat every 30 seconds. A session with no heartbeat for 60 seconds is automatically deleted from the roster. Undelivered messages expire after 15 seconds. No manual cleanup needed.
+
+> **Recommended naming convention:** Use `[project]-[name]` for session names, e.g. `myapp-planner`, `myapp-backend`, `myapp-tests`. Keep the prefix consistent across all workers in the same project and ensure it matches the `CC_DM_SESSION_PROJECT` value. This makes `who` output immediately scannable and helps Claude associate sessions with their project context at a glance.
+
+## Project-scoped messaging
+
+When working across multiple projects or worktrees, both broadcasts and DMs can be scoped to a project. Sessions with a `project` tag can only message other sessions with the same tag. Sessions without a project can message anyone (global, the default).
+
+```bash
+# Terminal 1 — frontend worker on myapp
+CC_DM_SESSION_NAME=frontend CC_DM_SESSION_ROLE=worker CC_DM_SESSION_PROJECT=myapp cc-dm
+
+# Terminal 2 — backend worker on myapp
+CC_DM_SESSION_NAME=backend CC_DM_SESSION_ROLE=worker CC_DM_SESSION_PROJECT=myapp cc-dm
+
+# Terminal 3 — worker on a different project
+CC_DM_SESSION_NAME=api-dev CC_DM_SESSION_ROLE=worker CC_DM_SESSION_PROJECT=api-server cc-dm
+```
+
+A broadcast from `frontend` reaches `backend` but not `api-dev`. A DM from `frontend` can reach `backend` (same project) but not `api-dev` (different project). A session without a project tag can broadcast and DM any active session — project scoping only restricts outbound messages from sessions that have a tag set.
+
+You can also set the project interactively via `/cc-dm:register` — the skill shows active project tags so you can pick an existing one.
+
+> **Note:** Project scoping is an opinionated default designed for structured multi-project workflows. You can override it at any time — use `/cc-dm:register` or say "register" to change a session's project tag, clear it for global access, or scope it to a different project. This lets you mix isolation styles: keep most workers scoped to their project while leaving a coordinator session global, or temporarily remove a session's project tag when it needs to reach across boundaries.
 
 ## Remote access
 
@@ -118,6 +142,7 @@ bun -e "
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| [v1.1.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.1.0) | 2026-03-24 | Project-scoped messaging — tag sessions to a project, broadcasts and DMs stay within project |
 | [v1.0.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.0.0) | 2026-03-22 | Production release — duplicate delivery guard, same-name protection, stronger session IDs |
 | [v0.3.0](https://github.com/Akram012388/cc-dm/releases/tag/v0.3.0) | 2026-03-22 | Fix MCP server path resolution for plugin marketplace installs |
 | [v0.2.0](https://github.com/Akram012388/cc-dm/releases/tag/v0.2.0) | 2026-03-21 | 44-test suite, clean shutdown, bus hardening |

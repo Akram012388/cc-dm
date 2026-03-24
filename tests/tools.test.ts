@@ -62,6 +62,40 @@ describe("handleRegister", () => {
     expect(result.sessionId).toBe("test-id");
     expect(result.name).toBe("planner");
     expect(result.role).toBe("orchestrator");
+    expect(result.project).toBe("");
+  });
+
+  test("accepts optional project", () => {
+    const result = handleRegister("test-id", "planner", "orchestrator", "myapp");
+    expect(result.success).toBe(true);
+    expect(result.project).toBe("myapp");
+  });
+
+  test("sanitizes project", () => {
+    const result = handleRegister("test-id", "planner", "orchestrator", "  MY App  ");
+    expect(result.success).toBe(true);
+    expect(result.project).toBe("my-app");
+  });
+
+  test("validates >64 char project", () => {
+    const result = handleRegister("test-id", "planner", "worker", "a".repeat(65));
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("project must be 64 chars");
+  });
+
+  test("error results include empty project field", () => {
+    const emptyName = handleRegister("id", "", "worker", "myapp");
+    expect(emptyName.project).toBe("");
+
+    const emptyRole = handleRegister("id", "name", "", "myapp");
+    expect(emptyRole.project).toBe("");
+  });
+
+  test("empty string project treated same as omitted", () => {
+    const omitted = handleRegister("id-1", "alice", "worker");
+    const empty = handleRegister("id-2", "bob", "worker", "");
+    expect(omitted.project).toBe("");
+    expect(empty.project).toBe("");
   });
 });
 
@@ -110,6 +144,48 @@ describe("handleDm", () => {
     expect(result.error).toBeDefined();
     // Re-init for afterEach cleanup
     initBus(tmpDbPath);
+  });
+
+  test("project-scoped DM only reaches same-project session", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp", "myapp");
+
+    const result = handleDm("alice", "bob", "hello", "myapp");
+    expect(result.success).toBe(true);
+
+    expect(readPendingMessages("id-b")).toHaveLength(1);
+  });
+
+  test("project-scoped DM rejects cross-project recipient", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp", "other");
+
+    const result = handleDm("alice", "bob", "hello", "myapp");
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("not in project");
+
+    expect(readPendingMessages("id-b")).toHaveLength(0);
+  });
+
+  test("global DM (no project) reaches any session", () => {
+    registerSession("id-a", "alice", "worker", "/tmp");
+    registerSession("id-b", "bob", "worker", "/tmp", "myapp");
+
+    const result = handleDm("alice", "bob", "hello", "");
+    expect(result.success).toBe(true);
+
+    expect(readPendingMessages("id-b")).toHaveLength(1);
+  });
+
+  test("default senderProject parameter allows global DM", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp", "other");
+
+    // Call without 4th argument — should default to global
+    const result = handleDm("alice", "bob", "hello");
+    expect(result.success).toBe(true);
+
+    expect(readPendingMessages("id-b")).toHaveLength(1);
   });
 });
 
@@ -173,5 +249,69 @@ describe("handleBroadcast", () => {
     const result = handleBroadcast("id-sender", "sender", "");
     expect(result.success).toBe(false);
     expect(result.error).toContain("content is required");
+  });
+
+  test("project-scoped broadcast only reaches same-project sessions", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp", "myapp");
+    registerSession("id-c", "charlie", "worker", "/tmp", "other");
+    registerSession("id-d", "dave", "worker", "/tmp");
+
+    const result = handleBroadcast("id-a", "alice", "myapp update", "myapp");
+    expect(result.success).toBe(true);
+    expect(result.recipientCount).toBe(1); // only bob
+
+    const bobMsgs = readPendingMessages("id-b");
+    expect(bobMsgs).toHaveLength(1);
+    expect(bobMsgs[0].content).toBe("myapp update");
+
+    const charlieMsgs = readPendingMessages("id-c");
+    expect(charlieMsgs).toHaveLength(0);
+
+    const daveMsgs = readPendingMessages("id-d");
+    expect(daveMsgs).toHaveLength(0);
+  });
+
+  test("global broadcast (no project) reaches all sessions", () => {
+    registerSession("id-a", "alice", "worker", "/tmp");
+    registerSession("id-b", "bob", "worker", "/tmp", "myapp");
+    registerSession("id-c", "charlie", "worker", "/tmp", "other");
+
+    const result = handleBroadcast("id-a", "alice", "hello everyone", "");
+    expect(result.success).toBe(true);
+    expect(result.recipientCount).toBe(2);
+
+    expect(readPendingMessages("id-b")).toHaveLength(1);
+    expect(readPendingMessages("id-c")).toHaveLength(1);
+  });
+
+  test("default senderProject parameter broadcasts globally", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp", "other");
+
+    // Call without 4th argument — should default to global
+    const result = handleBroadcast("id-a", "alice", "hello");
+    expect(result.success).toBe(true);
+    expect(result.recipientCount).toBe(1);
+    expect(readPendingMessages("id-b")).toHaveLength(1);
+  });
+
+  test("project-scoped broadcast with no same-project peers returns zero recipients", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp", "other");
+
+    const result = handleBroadcast("id-a", "alice", "anyone here?", "myapp");
+    expect(result.success).toBe(true);
+    expect(result.recipientCount).toBe(0);
+  });
+
+  test("project-scoped broadcast does NOT reach sessions with no project", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp");
+
+    const result = handleBroadcast("id-a", "alice", "myapp only", "myapp");
+    expect(result.success).toBe(true);
+    expect(result.recipientCount).toBe(0);
+    expect(readPendingMessages("id-b")).toHaveLength(0);
   });
 });
