@@ -190,7 +190,7 @@ function startPollLoop(): void {
 
       for (const message of messages) {
         if (deliveredIds.has(message.id)) {
-          try { deleteDeliveredMessage(message.id); } catch { /* retry delete */ }
+          try { deleteDeliveredMessage(message.id); } catch (err) { console.error(`[cc-dm/poll] retry delete failed for message ${message.id}:`, err); }
           continue;
         }
         try {
