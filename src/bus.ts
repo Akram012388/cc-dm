@@ -176,9 +176,9 @@ export function deleteDeliveredMessage(messageId: number): void {
 }
 
 // Throws on failure so handleDm can report accurate errors.
-export function findSessionsByName(name: string): Array<{ id: string; name: string; role: string }> {
-  return db.query<{ id: string; name: string; role: string }, [string]>(
-    `SELECT id, name, role FROM sessions
+export function findSessionsByName(name: string): Array<{ id: string; name: string; role: string; project: string }> {
+  return db.query<{ id: string; name: string; role: string; project: string }, [string]>(
+    `SELECT id, name, role, project FROM sessions
      WHERE name = ? AND status = 'active'`
   ).all(name);
 }

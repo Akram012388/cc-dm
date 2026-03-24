@@ -258,15 +258,36 @@ describe("integration", () => {
     expect(bob.project).toBe("");
   });
 
-  test("DMs work across project boundaries", () => {
+  test("DMs are blocked across project boundaries", () => {
     handleRegister("id-fe", "frontend", "worker", "myapp");
     handleRegister("id-be", "backend", "worker", "api-server");
 
-    const dm = handleDm("frontend", "backend", "need your API schema");
+    const dm = handleDm("frontend", "backend", "need your API schema", "myapp");
+    expect(dm.success).toBe(false);
+    expect(dm.error).toContain("not in project");
+
+    expect(readPendingMessages("id-be")).toHaveLength(0);
+  });
+
+  test("DMs work within same project", () => {
+    handleRegister("id-fe", "frontend", "worker", "myapp");
+    handleRegister("id-be", "backend", "worker", "myapp");
+
+    const dm = handleDm("frontend", "backend", "need your API schema", "myapp");
     expect(dm.success).toBe(true);
 
     const msgs = readPendingMessages("id-be");
     expect(msgs).toHaveLength(1);
     expect(msgs[0].content).toBe("need your API schema");
+  });
+
+  test("global DMs reach any session", () => {
+    handleRegister("id-mgr", "manager", "orchestrator");
+    handleRegister("id-fe", "frontend", "worker", "myapp");
+
+    const dm = handleDm("manager", "frontend", "status update?", "");
+    expect(dm.success).toBe(true);
+
+    expect(readPendingMessages("id-fe")).toHaveLength(1);
   });
 });

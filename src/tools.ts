@@ -70,7 +70,7 @@ export function handleRegister(sessionId: string, name: string, role: string, pr
   }
 }
 
-export function handleDm(fromName: string, to: string, content: string): DmResult {
+export function handleDm(fromName: string, to: string, content: string, senderProject: string = ""): DmResult {
   try {
     if (!fromName || fromName.trim().length === 0) {
       return { success: false, to: "", error: "from is required" };
@@ -91,8 +91,18 @@ export function handleDm(fromName: string, to: string, content: string): DmResul
       return { success: false, to: cleanTo, error: "no active session with that name" };
     }
 
+    // Project-scoped DM: only deliver to recipients in the same project.
+    // When senderProject is empty, no filtering is applied (global).
+    if (senderProject !== "") {
+      const inProject = recipients.filter((s) => s.project === senderProject);
+      if (inProject.length === 0) {
+        return { success: false, to: cleanTo, error: `session "${cleanTo}" is not in project "${senderProject}"` };
+      }
+    }
+
     let failures = 0;
     for (const recipient of recipients) {
+      if (senderProject !== "" && recipient.project !== senderProject) continue;
       if (!writeMessage(fromName, recipient.id, content)) {
         failures++;
       }

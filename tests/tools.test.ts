@@ -145,6 +145,48 @@ describe("handleDm", () => {
     // Re-init for afterEach cleanup
     initBus(tmpDbPath);
   });
+
+  test("project-scoped DM only reaches same-project session", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp", "myapp");
+
+    const result = handleDm("alice", "bob", "hello", "myapp");
+    expect(result.success).toBe(true);
+
+    expect(readPendingMessages("id-b")).toHaveLength(1);
+  });
+
+  test("project-scoped DM rejects cross-project recipient", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp", "other");
+
+    const result = handleDm("alice", "bob", "hello", "myapp");
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("not in project");
+
+    expect(readPendingMessages("id-b")).toHaveLength(0);
+  });
+
+  test("global DM (no project) reaches any session", () => {
+    registerSession("id-a", "alice", "worker", "/tmp");
+    registerSession("id-b", "bob", "worker", "/tmp", "myapp");
+
+    const result = handleDm("alice", "bob", "hello", "");
+    expect(result.success).toBe(true);
+
+    expect(readPendingMessages("id-b")).toHaveLength(1);
+  });
+
+  test("default senderProject parameter allows global DM", () => {
+    registerSession("id-a", "alice", "worker", "/tmp", "myapp");
+    registerSession("id-b", "bob", "worker", "/tmp", "other");
+
+    // Call without 4th argument — should default to global
+    const result = handleDm("alice", "bob", "hello");
+    expect(result.success).toBe(true);
+
+    expect(readPendingMessages("id-b")).toHaveLength(1);
+  });
 });
 
 describe("handleWho", () => {

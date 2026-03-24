@@ -347,12 +347,13 @@ describe("deleteDeliveredMessage", () => {
 });
 
 describe("findSessionsByName", () => {
-  test("finds sessions by name", () => {
-    registerSession("id-1", "planner", "worker", "/tmp");
+  test("finds sessions by name with project field", () => {
+    registerSession("id-1", "planner", "worker", "/tmp", "myapp");
     const results = findSessionsByName("planner");
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe("id-1");
     expect(results[0].name).toBe("planner");
+    expect(results[0].project).toBe("myapp");
   });
 
   test("returns multiple matches for same name", () => {

@@ -93,7 +93,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "dm",
-      description: "Send a direct message to another session by name",
+      description: "Send a direct message to another session by name. If this session has a project set, only sessions in the same project can be reached.",
       inputSchema: {
         type: "object" as const,
         properties: {
@@ -160,7 +160,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const result = handleDm(
         sessionName,
         String(req.params.arguments?.to ?? ""),
-        String(req.params.arguments?.content ?? "")
+        String(req.params.arguments?.content ?? ""),
+        sessionProject
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     }

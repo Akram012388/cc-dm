@@ -113,7 +113,7 @@ CC_DM_SESSION_NAME=backend CC_DM_SESSION_ROLE=worker CC_DM_SESSION_PROJECT=myapp
 CC_DM_SESSION_NAME=api-dev CC_DM_SESSION_ROLE=worker CC_DM_SESSION_PROJECT=api-server cc-dm
 ```
 
-A broadcast from `frontend` reaches `backend` but not `api-dev`. A session without a project tag broadcasts to all sessions, including those with project tags — project scoping only restricts outbound broadcasts from sessions that have a tag set. DMs are always point-to-point and unaffected by project scope.
+A broadcast from `frontend` reaches `backend` but not `api-dev`. A DM from `frontend` can reach `backend` (same project) but not `api-dev` (different project). A session without a project tag can broadcast and DM any active session — project scoping only restricts outbound messages from sessions that have a tag set.
 
 You can also set the project interactively via `/cc-dm:register` — the skill shows active project tags so you can pick an existing one.
 

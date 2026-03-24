@@ -49,9 +49,9 @@ When the user says "broadcast [message]" or "tell all sessions [message]":
   Use the broadcast tool.
   Example: broadcast(content="wrapping up in 10 minutes")
 
-If this session has a project tag set, broadcasts are automatically scoped
-to sessions with the same project tag. Sessions without a project tag
-broadcast to all active sessions.
+If this session has a project tag set, both broadcasts and DMs are
+automatically scoped to sessions with the same project tag. Sessions
+without a project tag can broadcast and DM any active session.
 
 ## Checking who is online
 
