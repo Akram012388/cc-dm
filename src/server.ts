@@ -135,11 +135,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
   switch (req.params.name) {
     case "register": {
+      const requestedProject = req.params.arguments?.project;
+      const projectArg = requestedProject !== undefined
+        ? String(requestedProject)
+        : sessionProject;
+
       const result = handleRegister(
         SESSION_ID,
         String(req.params.arguments?.name ?? ""),
         String(req.params.arguments?.role ?? ""),
-        String(req.params.arguments?.project ?? "")
+        projectArg
       );
       if (result.success) {
         sessionName = result.name;
