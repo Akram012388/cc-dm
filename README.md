@@ -117,6 +117,8 @@ A broadcast from `frontend` reaches `backend` but not `api-dev`. A DM from `fron
 
 You can also set the project interactively via `/cc-dm:register` — the skill shows active project tags so you can pick an existing one.
 
+> **Note:** Project scoping is an opinionated default designed for structured multi-project workflows. You can override it at any time — use `/cc-dm:register` or say "register" to change a session's project tag, clear it for global access, or scope it to a different project. This lets you mix isolation styles: keep most workers scoped to their project while leaving a coordinator session global, or temporarily remove a session's project tag when it needs to reach across boundaries.
+
 ## Remote access
 
 Claude Code has a built-in `/remote-control` feature that lets you access any session from the Claude iOS app. This pairs naturally with cc-dm — run multiple named sessions locally, drop into any one from your phone, and use cc-dm to coordinate between them.
