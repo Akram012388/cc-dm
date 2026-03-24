@@ -131,9 +131,14 @@ export function handleBroadcast(fromId: string, fromName: string, content: strin
     const sessions = listActiveSessions();
     let recipients = sessions.filter((s) => s.id !== fromId);
 
-    // Project-scoped broadcast: only send to sessions with the same project tag
+    // Project-scoped broadcast: only send to sessions with the same project tag.
+    // When senderProject is empty, the filter is skipped (global broadcast).
     if (senderProject !== "") {
+      const beforeFilter = recipients.length;
       recipients = recipients.filter((s) => s.project === senderProject);
+      if (recipients.length === 0 && beforeFilter > 0) {
+        console.error(`[cc-dm/broadcast] project="${senderProject}" filtered out all ${beforeFilter} recipient(s)`);
+      }
     }
 
     let failures = 0;
