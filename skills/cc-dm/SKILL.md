@@ -12,8 +12,8 @@ copy-pasting context manually.
 ## On startup
 
 Session registration is handled automatically from environment variables
-(CC_DM_SESSION_NAME, CC_DM_SESSION_ROLE). Check the MCP instructions to
-see if name and role are already configured:
+(CC_DM_SESSION_NAME, CC_DM_SESSION_ROLE, CC_DM_SESSION_PROJECT). Check
+the MCP instructions to see if name, role, and project are already configured:
 
 - **Both configured:** Do nothing. Registration is complete.
 - **Either missing:** Invoke the /cc-dm:register skill on first interaction

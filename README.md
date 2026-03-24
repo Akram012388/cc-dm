@@ -56,7 +56,7 @@ Or just `cc-dm` and register interactively via `/cc-dm:register`.
 Start a session without the alias:
 
 ```bash
-CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator \
+CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator CC_DM_SESSION_PROJECT=myapp \
 claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
 ```
 
@@ -76,12 +76,12 @@ Open two or more terminals and launch Claude Code with different session identit
 
 **Terminal 1 — Planner:**
 ```bash
-CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
+CC_DM_SESSION_NAME=planner CC_DM_SESSION_ROLE=orchestrator CC_DM_SESSION_PROJECT=myapp claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
 ```
 
 **Terminal 2 — Backend:**
 ```bash
-CC_DM_SESSION_NAME=backend CC_DM_SESSION_ROLE=worker claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
+CC_DM_SESSION_NAME=backend CC_DM_SESSION_ROLE=worker CC_DM_SESSION_PROJECT=myapp claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
 ```
 
 Or skip the env vars and register interactively using `/cc-dm:register` after launch.
