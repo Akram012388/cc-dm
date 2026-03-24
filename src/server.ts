@@ -43,7 +43,10 @@ type ChannelNotification = {
 
 function buildRegistrationInstruction(): string {
   if (NAME_PROVIDED && ROLE_PROVIDED) {
-    return `Your session is registered as "${SESSION_NAME}" with role "${SESSION_ROLE}". Do NOT call register unless the user explicitly asks to change the name or role.`;
+    const projectNote = SESSION_PROJECT
+      ? ` in project "${SESSION_PROJECT}"`
+      : " with no project scope (broadcasts will be global)";
+    return `Your session is registered as "${SESSION_NAME}" with role "${SESSION_ROLE}"${projectNote}. Do NOT call register unless the user explicitly asks to change the name, role, or project.`;
   }
   const missing = [];
   if (!NAME_PROVIDED) missing.push("session name");
