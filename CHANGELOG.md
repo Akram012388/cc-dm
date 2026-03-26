@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [1.1.0] - 2026-03-24
 
 ### Added
+- Published to npm as [`cc-dm`](https://www.npmjs.com/package/cc-dm) for OSS discoverability
+- `files`, `repository`, `homepage`, `bugs`, `keywords`, `engines`, `publishConfig` fields in package.json
+- `prepublishOnly` script runs typecheck + tests before every publish
 - Project-scoped messaging — sessions can set an optional `project` tag during registration; both broadcasts and DMs from a session with a project tag only reach sessions with the same tag
 - `project` column on sessions table with automatic schema migration for existing DBs
 - `CC_DM_SESSION_PROJECT` env var for pre-configuring project at launch
