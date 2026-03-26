@@ -4,7 +4,7 @@ import { updateHeartbeat, expireStaleSessions } from "./bus.js";
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let cleanupTimer: ReturnType<typeof setInterval> | null = null;
-export function startHeartbeat(sessionId: string): void {
+export function startHeartbeat(sessionId: string, onGhost?: () => void): void {
   if (!sessionId || sessionId.trim().length === 0) {
     console.error("[cc-dm/heartbeat] sessionId is required");
     return;
@@ -28,7 +28,10 @@ export function startHeartbeat(sessionId: string): void {
 
   heartbeatTimer = setInterval(() => {
     try {
-      updateHeartbeat(sessionId);
+      const affected = updateHeartbeat(sessionId);
+      if (affected === 0 && onGhost) {
+        onGhost();
+      }
     } catch (err) {
       console.error("[cc-dm/heartbeat] heartbeat write failed:", err);
     }

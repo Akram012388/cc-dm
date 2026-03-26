@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `PreCompact` prompt hook in `plugin.json` that nudges Claude to call `who` for identity recovery post-compaction
 - Mutable `sessionRole` in `server.ts` — updated on registration alongside `sessionName` and `sessionProject`
 - 3 new tests for `withIdentity()` helper
+- Heartbeat self-heal — `updateHeartbeat()` returns rows affected; when 0 (session row deleted, e.g., after system sleep), `startHeartbeat`'s `onGhost` callback re-registers the session automatically within ~30s
+- 3 new tests for heartbeat ghost recovery (`updateHeartbeat` return value + ghost re-registration)
 
 ## [1.1.0] - 2026-03-24
 

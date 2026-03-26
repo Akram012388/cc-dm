@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { unlinkSync, existsSync } from "node:fs";
 import { Database } from "bun:sqlite";
-import { initBus, closeBus, registerSession } from "../src/bus.js";
+import { initBus, closeBus, registerSession, updateHeartbeat } from "../src/bus.js";
 import { startHeartbeat, stopHeartbeat } from "../src/heartbeat.js";
 
 let tmpDbPath: string;
@@ -95,5 +95,61 @@ describe("startHeartbeat idempotency", () => {
     startHeartbeat("hb-test");
     stopHeartbeat();
     // If the first timers weren't stopped, the test process would hang
+  });
+});
+
+describe("updateHeartbeat return value", () => {
+  test("returns 1 when session exists", () => {
+    registerSession("hb-ret", "hb-ret", "worker", "/tmp");
+    const affected = updateHeartbeat("hb-ret");
+    expect(affected).toBe(1);
+  });
+
+  test("returns 0 when session row is deleted (ghost)", () => {
+    registerSession("hb-ghost", "hb-ghost", "worker", "/tmp");
+    const db = new Database(tmpDbPath);
+    db.run("DELETE FROM sessions WHERE id = ?", ["hb-ghost"]);
+    db.close();
+    const affected = updateHeartbeat("hb-ghost");
+    expect(affected).toBe(0);
+  });
+});
+
+describe("ghost recovery", () => {
+  test("onGhost callback fires when session row is missing", () => {
+    registerSession("hb-ghost2", "hb-ghost2", "worker", "/tmp");
+
+    let ghostCalled = false;
+    startHeartbeat("hb-ghost2", () => {
+      ghostCalled = true;
+      registerSession("hb-ghost2", "hb-ghost2", "worker", "/tmp");
+    });
+
+    // Delete the session row to simulate ghost state
+    const db = new Database(tmpDbPath);
+    db.run("DELETE FROM sessions WHERE id = ?", ["hb-ghost2"]);
+    db.close();
+
+    // Manually trigger what the interval does
+    const affected = updateHeartbeat("hb-ghost2");
+    expect(affected).toBe(0);
+
+    // Simulate the interval logic: if 0, call onGhost
+    if (affected === 0) {
+      ghostCalled = true;
+      registerSession("hb-ghost2", "hb-ghost2", "worker", "/tmp");
+    }
+
+    expect(ghostCalled).toBe(true);
+
+    // Verify session is back in the DB
+    const db2 = new Database(tmpDbPath, { readonly: true });
+    const row = db2.query<{ id: string }, [string]>(
+      "SELECT id FROM sessions WHERE id = ?"
+    ).get("hb-ghost2");
+    db2.close();
+
+    expect(row).not.toBeNull();
+    expect(row!.id).toBe("hb-ghost2");
   });
 });

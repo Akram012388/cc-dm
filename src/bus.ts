@@ -106,15 +106,16 @@ export function deregisterSession(sessionId: string): void {
   }
 }
 
-export function updateHeartbeat(sessionId: string): void {
+export function updateHeartbeat(sessionId: string): number {
   try {
     const now = new Date().toISOString();
-    db.run(
-      `UPDATE sessions SET last_seen = ?, status = 'active' WHERE id = ?`,
-      [now, sessionId]
-    );
+    const result = db.query(
+      `UPDATE sessions SET last_seen = ?, status = 'active' WHERE id = ? RETURNING id`
+    ).all(now, sessionId);
+    return result.length;
   } catch (err) {
     console.error("[cc-dm/bus] updateHeartbeat failed:", err);
+    return -1;
   }
 }
 

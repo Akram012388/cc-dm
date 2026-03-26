@@ -6,7 +6,7 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { initBus, readPendingMessages, deleteDeliveredMessage, deregisterSession } from "./bus.js";
+import { initBus, readPendingMessages, deleteDeliveredMessage, deregisterSession, registerSession } from "./bus.js";
 import { handleDm, handleWho, handleRegister, handleBroadcast, withIdentity } from "./tools.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 import { sanitize } from "./sanitize.js";
@@ -254,7 +254,14 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  startHeartbeat(SESSION_ID);
+  startHeartbeat(SESSION_ID, () => {
+    try {
+      registerSession(SESSION_ID, sessionName, sessionRole, process.cwd(), sessionProject);
+      console.error(`[cc-dm/heartbeat] session ghosted — re-registered as "${sessionName}"`);
+    } catch (err) {
+      console.error("[cc-dm/heartbeat] ghost re-registration failed:", err);
+    }
+  });
   setTimeout(() => {
     startPollLoop();
   }, 1000);

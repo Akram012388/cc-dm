@@ -176,6 +176,10 @@ bun -e "
 
 See [CHANGELOG.md](CHANGELOG.md) for full details.
 
+## Known limitations
+
+**System sleep recovery:** When a laptop sleeps for more than 60 seconds, all cc-dm sessions are marked stale and deleted from the bus by the next cleanup cycle. The heartbeat self-heals automatically — each session re-registers within ~30 seconds of waking. During that window, the session is unreachable via DM or broadcast but the MCP server process continues running. No manual intervention is needed.
+
 ## Development status
 
 Built on Claude Code Channels (research preview, v2.1.80+). The `--dangerously-load-development-channels` flag is required until cc-dm is submitted to and approved by the official Channels marketplace. Breaking changes possible as the Channels protocol matures toward GA. Track: https://code.claude.com/docs/en/channels-reference
