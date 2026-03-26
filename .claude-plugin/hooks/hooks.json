@@ -1,0 +1,16 @@
+{
+  "description": "cc-dm compaction resilience — preserves session identity context before compaction",
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'IMPORTANT cc-dm state: This session may have a cc-dm identity registered in the database. The session ID in the MCP server instructions above is authoritative. On your next cc-dm interaction, call the who tool to match your session ID against active sessions and recover your display name, role, and project. Do NOT re-register — your registration persists in the database.'"
+          }
+        ]
+      }
+    ]
+  }
+}

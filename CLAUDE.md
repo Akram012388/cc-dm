@@ -15,6 +15,7 @@ cc-dm is a Claude Code Channel plugin that enables direct peer-to-peer messaging
 ```
 .claude-plugin/plugin.json       Plugin manifest + inline mcpServers config
 .claude-plugin/marketplace.json  GitHub-hosted marketplace definition
+.claude-plugin/hooks/hooks.json  PreCompact hook for compaction identity recovery
 src/bus.ts                       SQLite WAL bus, sessions + messages tables
 src/tools.ts                     Four tool handlers: dm, who, register, broadcast
 src/sanitize.ts                  Shared string sanitizer (trim, lowercase, spaces→hyphens)
@@ -22,7 +23,7 @@ src/heartbeat.ts                 30s heartbeat writer, 60s session expiry + 15s 
 src/server.ts                    MCP entry point, claude/channel capability, poll loop, shutdown
 skills/cc-dm/SKILL.md            Skill for natural language usage
 skills/register/SKILL.md         Interactive session registration skill
-tests/                           Unit + integration tests (88 tests, bun:test)
+tests/                           Unit + integration tests (94 tests, bun:test)
 CHANGELOG.md                     Version history
 LICENSE                          MIT license
 install.sh                       curl | bash installer
@@ -50,9 +51,9 @@ Project-scoped messaging: If a session has a non-empty `project` tag, both `hand
 
 **Important:** The `from_session` column in the `messages` table stores the sender's **display name**, not their session ID. This is a historical naming choice. Do not JOIN `messages.from_session` against `sessions.id` — they are different namespaces.
 
-Compaction resilience: MCP stdio servers survive `/compact` and auto-compaction — the process keeps running with the same session ID, in-memory state, and DB registration. The only failure mode is context-level: the static MCP `instructions` string (set once at server construction) still says "not configured" after interactive registration, and compaction compresses away the conversation context that recorded registration. Two layers address this: (1) every tool response includes `_identity: { name, role, project }` via `withIdentity()` so the first tool call after compaction restores identity awareness, and (2) a `PreCompact` prompt hook in `plugin.json` nudges Claude to call `who` to recover identity on next interaction. Incoming channel messages also carry `meta.to_session = sessionName`, providing a free identity reminder on message delivery.
+Compaction resilience: MCP stdio servers survive `/compact` and auto-compaction — the process keeps running with the same session ID, in-memory state, and DB registration. The only failure mode is context-level: the static MCP `instructions` string (set once at server construction) still says "not configured" after interactive registration, and compaction compresses away the conversation context that recorded registration. Two layers address this: (1) every tool response includes `_identity: { name, role, project }` via `withIdentity()` so the first tool call after compaction restores identity awareness, and (2) a `PreCompact` command hook in `.claude-plugin/hooks/hooks.json` nudges Claude to call `who` to recover identity on next interaction. Incoming channel messages also carry `meta.to_session = sessionName`, providing a free identity reminder on message delivery.
 
-Heartbeat self-heal: `updateHeartbeat()` returns the number of rows affected (`db.changes`). If 0, the session row was deleted (e.g., by another session's `expireStaleSessions` after system sleep). `startHeartbeat` accepts an optional `onGhost` callback; when the heartbeat detects 0 rows affected, it calls the callback. In `server.ts`, the callback calls `registerSession()` directly (not `handleRegister` — avoids the name-uniqueness check that would false-positive on the session's own name) with current `sessionName`/`sessionRole`/`sessionProject` from the mutable closure. Recovery happens within one heartbeat interval (~30s). During the gap, the session is unreachable via DM/broadcast but the MCP process continues running.
+Heartbeat self-heal: `updateHeartbeat()` returns the number of rows affected (via `RETURNING id` clause — bun:sqlite doesn't expose `db.changes`). If 0, the session row was deleted (e.g., by another session's `expireStaleSessions` after system sleep). `startHeartbeat` accepts an optional `onGhost` callback; when the heartbeat detects 0 rows affected, it calls the callback. In `server.ts`, the callback calls `registerSession()` directly (not `handleRegister` — avoids the name-uniqueness check that would false-positive on the session's own name) with current `sessionName`/`sessionRole`/`sessionProject` from the mutable closure. Recovery happens within one heartbeat interval (~30s). During the gap, the session is unreachable via DM/broadcast but the MCP process continues running.
 
 Bus path: `~/.cc-dm/bus.db`
 
