@@ -1,5 +1,8 @@
 # cc-dm
 
+[![npm version](https://img.shields.io/npm/v/cc-dm.svg)](https://www.npmjs.com/package/cc-dm)
+[![license](https://img.shields.io/npm/l/cc-dm.svg)](https://github.com/Akram012388/cc-dm/blob/main/LICENSE)
+
 Peer-to-peer direct messaging between Claude Code sessions.
 
 ## What it does
@@ -38,7 +41,19 @@ Start a new Claude Code session and enter the following commands:
 
 Restart Claude Code. The cc-dm tools and skills will be available in all sessions.
 
-## Install (alternative)
+## Install (alternative methods)
+
+**Via npm** (requires [Bun](https://bun.sh)):
+
+```bash
+npm install cc-dm
+```
+
+The npm package contains the full plugin source. After installing, follow the [Quick Start](#quick-start) above to register the plugin with Claude Code.
+
+> **Note:** cc-dm is a Claude Code channel plugin, not a standalone library. The npm package exists for discoverability and as a distribution mirror — the primary install method is the plugin marketplace above.
+
+**Via curl:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Akram012388/cc-dm/main/install.sh | bash
@@ -153,7 +168,7 @@ bun -e "
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| [v1.1.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.1.0) | 2026-03-24 | Project-scoped messaging — tag sessions to a project, broadcasts and DMs stay within project |
+| [v1.1.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.1.0) | 2026-03-24 | Project-scoped messaging, [npm package](https://www.npmjs.com/package/cc-dm) published |
 | [v1.0.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.0.0) | 2026-03-22 | Production release — duplicate delivery guard, same-name protection, stronger session IDs |
 | [v0.3.0](https://github.com/Akram012388/cc-dm/releases/tag/v0.3.0) | 2026-03-22 | Fix MCP server path resolution for plugin marketplace installs |
 | [v0.2.0](https://github.com/Akram012388/cc-dm/releases/tag/v0.2.0) | 2026-03-21 | 44-test suite, clean shutdown, bus hardening |
