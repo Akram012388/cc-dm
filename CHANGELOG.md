@@ -4,7 +4,7 @@ All notable changes to cc-dm will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.2.0] - 2026-03-27
 
 ### Added
 - Compaction resilience — all tool responses now include `_identity` field with session name, role, and project so Claude recovers its identity after `/compact` or auto-compaction

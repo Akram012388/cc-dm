@@ -58,7 +58,7 @@ function buildRegistrationInstruction(): string {
 const registrationInstruction = buildRegistrationInstruction();
 
 const server = new Server<never, ChannelNotification>(
-  { name: "cc-dm", version: "1.1.0" },
+  { name: "cc-dm", version: "1.2.0" },
   {
     capabilities: {
       experimental: { "claude/channel": {} },
