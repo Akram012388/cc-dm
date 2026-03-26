@@ -7,7 +7,7 @@ import {
   CallToolRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { initBus, readPendingMessages, deleteDeliveredMessage, deregisterSession } from "./bus.js";
-import { handleDm, handleWho, handleRegister, handleBroadcast } from "./tools.js";
+import { handleDm, handleWho, handleRegister, handleBroadcast, withIdentity } from "./tools.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 import { sanitize } from "./sanitize.js";
 
@@ -31,6 +31,7 @@ const SESSION_PROJECT = sanitize(
 );
 
 let sessionName = SESSION_NAME;
+let sessionRole = SESSION_ROLE;
 let sessionProject = SESSION_PROJECT;
 
 type ChannelNotification = {
@@ -151,10 +152,12 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       );
       if (result.success) {
         sessionName = result.name;
+        sessionRole = result.role;
         sessionProject = result.project;
-        console.error(`cc-dm session registered as "${sessionName}" project="${sessionProject}"`);
+        console.error(`cc-dm session registered as "${sessionName}" role="${sessionRole}" project="${sessionProject}"`);
       }
-      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      const enriched = withIdentity(result, { name: sessionName, role: sessionRole, project: sessionProject });
+      return { content: [{ type: "text" as const, text: JSON.stringify(enriched, null, 2) }] };
     }
     case "dm": {
       const result = handleDm(
@@ -163,11 +166,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         String(req.params.arguments?.content ?? ""),
         sessionProject
       );
-      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      const enriched = withIdentity(result, { name: sessionName, role: sessionRole, project: sessionProject });
+      return { content: [{ type: "text" as const, text: JSON.stringify(enriched, null, 2) }] };
     }
     case "who": {
       const result = handleWho();
-      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      const enriched = withIdentity(result, { name: sessionName, role: sessionRole, project: sessionProject });
+      return { content: [{ type: "text" as const, text: JSON.stringify(enriched, null, 2) }] };
     }
     case "broadcast": {
       const result = handleBroadcast(
@@ -176,7 +181,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         String(req.params.arguments?.content ?? ""),
         sessionProject
       );
-      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      const enriched = withIdentity(result, { name: sessionName, role: sessionRole, project: sessionProject });
+      return { content: [{ type: "text" as const, text: JSON.stringify(enriched, null, 2) }] };
     }
     default:
       return { content: [{ type: "text" as const, text: JSON.stringify({ error: "Unknown tool" }) }] };

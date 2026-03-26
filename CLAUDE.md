@@ -50,6 +50,8 @@ Project-scoped messaging: If a session has a non-empty `project` tag, both `hand
 
 **Important:** The `from_session` column in the `messages` table stores the sender's **display name**, not their session ID. This is a historical naming choice. Do not JOIN `messages.from_session` against `sessions.id` — they are different namespaces.
 
+Compaction resilience: MCP stdio servers survive `/compact` and auto-compaction — the process keeps running with the same session ID, in-memory state, and DB registration. The only failure mode is context-level: the static MCP `instructions` string (set once at server construction) still says "not configured" after interactive registration, and compaction compresses away the conversation context that recorded registration. Two layers address this: (1) every tool response includes `_identity: { name, role, project }` via `withIdentity()` so the first tool call after compaction restores identity awareness, and (2) a `PreCompact` prompt hook in `plugin.json` nudges Claude to call `who` to recover identity on next interaction. Incoming channel messages also carry `meta.to_session = sessionName`, providing a free identity reminder on message delivery.
+
 Bus path: `~/.cc-dm/bus.db`
 
 `initBus(dbPath?: string)` — optional param for test DB isolation. `closeBus()` — closes DB connection (used by tests). `shutdown()` — centralized cleanup in server.ts (stopPollLoop + stopHeartbeat + deregisterSession + process.exit). `stopPollLoop()` — exported for clean shutdown. Process listens for SIGINT, SIGTERM, and stdin close to trigger shutdown.

@@ -62,10 +62,21 @@ When the user asks "who is active" or "who is online" or "list sessions":
   Use the who tool.
   It returns all sessions with active heartbeats on this machine.
 
+## After compaction
+
+When `/compact` or auto-compaction occurs, you may lose awareness of your
+session identity. Your MCP server process survives compaction — the session
+ID, DB registration, and heartbeat all persist. Every tool response includes
+an `_identity` field with your current name, role, and project, so the first
+cc-dm tool call after compaction restores your identity. Do NOT re-register.
+
+If you are unsure of your identity, call the `who` tool and match your
+session ID (from the MCP instructions) against the results.
+
 ## Rules
 
 - Never use console.log — you are inside an MCP stdio session
 - Do not poll manually — messages arrive automatically via the channel
-- Do not register more than once per session startup
+- Do not register more than once — registration persists across compaction
 - If a dm fails, report the error and move on — do not retry in a loop
 - Messages to offline sessions expire after 15 seconds if undelivered

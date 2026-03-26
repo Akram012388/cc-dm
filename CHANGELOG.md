@@ -4,6 +4,15 @@ All notable changes to cc-dm will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- Compaction resilience — all tool responses now include `_identity` field with session name, role, and project so Claude recovers its identity after `/compact` or auto-compaction
+- `withIdentity()` helper in `tools.ts` for enriching tool responses with session identity
+- `PreCompact` prompt hook in `plugin.json` that nudges Claude to call `who` for identity recovery post-compaction
+- Mutable `sessionRole` in `server.ts` — updated on registration alongside `sessionName` and `sessionProject`
+- 3 new tests for `withIdentity()` helper
+
 ## [1.1.0] - 2026-03-24
 
 ### Added

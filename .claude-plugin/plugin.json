@@ -14,5 +14,13 @@
       "command": "bun",
       "args": ["run", "--cwd", "${CLAUDE_PLUGIN_ROOT}", "--silent", "start"]
     }
+  },
+  "hooks": {
+    "PreCompact": [
+      {
+        "type": "prompt",
+        "prompt": "IMPORTANT cc-dm state: This session's cc-dm identity may need recovery after compaction. The session ID in the MCP server instructions above is authoritative. On your next cc-dm interaction, call the `who` tool to match your session ID against active sessions and recover your display name, role, and project. Do NOT re-register — your registration persists in the database."
+      }
+    ]
   }
 }

@@ -31,6 +31,23 @@ export type BroadcastResult = {
   error?: string;
 };
 
+export type Identity = {
+  name: string;
+  role: string;
+  project: string;
+};
+
+export function withIdentity<T extends Record<string, unknown>>(
+  result: T,
+  identity: Identity
+): T & { _identity: Identity; _note: string } {
+  return {
+    ...result,
+    _identity: identity,
+    _note: "This is your cc-dm session identity. Use it for all cc-dm interactions.",
+  };
+}
+
 export function handleRegister(sessionId: string, name: string, role: string, project?: string): RegisterResult {
   try {
     if (!name || name.trim().length === 0) {

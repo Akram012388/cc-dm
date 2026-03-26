@@ -15,6 +15,7 @@ import {
   handleDm,
   handleWho,
   handleBroadcast,
+  withIdentity,
 } from "../src/tools.js";
 
 let tmpDbPath: string;
@@ -34,6 +35,35 @@ afterEach(() => {
     const f = tmpDbPath + suffix;
     if (existsSync(f)) unlinkSync(f);
   }
+});
+
+describe("withIdentity", () => {
+  test("appends _identity and _note to result", () => {
+    const result = { success: true, to: "bob" };
+    const identity = { name: "alice", role: "worker", project: "myapp" };
+    const enriched = withIdentity(result, identity);
+    expect(enriched.success).toBe(true);
+    expect(enriched.to).toBe("bob");
+    expect(enriched._identity).toEqual(identity);
+    expect(enriched._note).toContain("session identity");
+  });
+
+  test("preserves all original fields", () => {
+    const result = { success: false, error: "something broke", count: 42 };
+    const identity = { name: "eng", role: "expert", project: "" };
+    const enriched = withIdentity(result, identity);
+    expect(enriched.success).toBe(false);
+    expect(enriched.error).toBe("something broke");
+    expect(enriched.count).toBe(42);
+    expect(enriched._identity.name).toBe("eng");
+  });
+
+  test("works with empty project", () => {
+    const result = { success: true };
+    const identity = { name: "test", role: "worker", project: "" };
+    const enriched = withIdentity(result, identity);
+    expect(enriched._identity.project).toBe("");
+  });
 });
 
 describe("handleRegister", () => {
