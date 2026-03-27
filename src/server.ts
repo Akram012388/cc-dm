@@ -7,7 +7,7 @@ import {
   CallToolRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { initBus, readPendingMessages, deleteDeliveredMessage, deregisterSession, registerSession } from "./bus.js";
-import { handleDm, handleWho, handleRegister, handleBroadcast, withIdentity } from "./tools.js";
+import { handleDm, handleWho, handleRegister, handleBroadcast, withIdentity, buildMeta } from "./tools.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 import { sanitize } from "./sanitize.js";
 
@@ -106,6 +106,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             type: "string",
             description: "Message content to send",
           },
+          priority: {
+            type: "string",
+            enum: ["urgent", "normal", "low"],
+            description: "Message priority (default: normal)",
+          },
+          message_type: {
+            type: "string",
+            enum: ["task", "question", "status", "review"],
+            description: "Message type for categorization",
+          },
+          thread_id: {
+            type: "string",
+            maxLength: 64,
+            description: "Thread ID for conversation threading",
+          },
         },
         required: ["to", "content"],
       },
@@ -128,6 +143,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           content: {
             type: "string",
             description: "Message to send to all active sessions",
+          },
+          priority: {
+            type: "string",
+            enum: ["urgent", "normal", "low"],
+            description: "Message priority (default: normal)",
+          },
+          message_type: {
+            type: "string",
+            enum: ["task", "question", "status", "review"],
+            description: "Message type for categorization",
+          },
+          thread_id: {
+            type: "string",
+            maxLength: 64,
+            description: "Thread ID for conversation threading",
           },
         },
         required: ["content"],
@@ -160,11 +190,22 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       return { content: [{ type: "text" as const, text: JSON.stringify(enriched, null, 2) }] };
     }
     case "dm": {
+      const { meta, error: metaError } = buildMeta(
+        req.params.arguments?.priority as string | undefined,
+        req.params.arguments?.message_type as string | undefined,
+        req.params.arguments?.thread_id as string | undefined,
+      );
+      if (metaError) {
+        const errResult = { success: false, to: "", error: metaError };
+        const enriched = withIdentity(errResult, { name: sessionName, role: sessionRole, project: sessionProject });
+        return { content: [{ type: "text" as const, text: JSON.stringify(enriched, null, 2) }] };
+      }
       const result = handleDm(
         sessionName,
         String(req.params.arguments?.to ?? ""),
         String(req.params.arguments?.content ?? ""),
-        sessionProject
+        sessionProject,
+        meta
       );
       const enriched = withIdentity(result, { name: sessionName, role: sessionRole, project: sessionProject });
       return { content: [{ type: "text" as const, text: JSON.stringify(enriched, null, 2) }] };
@@ -175,11 +216,22 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       return { content: [{ type: "text" as const, text: JSON.stringify(enriched, null, 2) }] };
     }
     case "broadcast": {
+      const { meta, error: metaError } = buildMeta(
+        req.params.arguments?.priority as string | undefined,
+        req.params.arguments?.message_type as string | undefined,
+        req.params.arguments?.thread_id as string | undefined,
+      );
+      if (metaError) {
+        const errResult = { success: false, from: sessionName, recipientCount: 0, error: metaError };
+        const enriched = withIdentity(errResult, { name: sessionName, role: sessionRole, project: sessionProject });
+        return { content: [{ type: "text" as const, text: JSON.stringify(enriched, null, 2) }] };
+      }
       const result = handleBroadcast(
         SESSION_ID,
         sessionName,
         String(req.params.arguments?.content ?? ""),
-        sessionProject
+        sessionProject,
+        meta
       );
       const enriched = withIdentity(result, { name: sessionName, role: sessionRole, project: sessionProject });
       return { content: [{ type: "text" as const, text: JSON.stringify(enriched, null, 2) }] };
@@ -209,6 +261,7 @@ function startPollLoop(): void {
             params: {
               content: message.content,
               meta: {
+                ...message.meta,
                 from_session: message.from_session,
                 to_session: sessionName,
                 message_id: String(message.id),

@@ -318,6 +318,45 @@ describe("readPendingMessages", () => {
   });
 });
 
+describe("message meta", () => {
+  test("writeMessage stores meta and readPendingMessages returns it", () => {
+    const meta = { priority: "urgent", message_type: "task" };
+    writeMessage("sender", "target-id", "hello", meta);
+    const msgs = readPendingMessages("target-id");
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].meta).toEqual(meta);
+  });
+
+  test("writeMessage without meta defaults to empty object", () => {
+    writeMessage("sender", "target-id", "hello");
+    const msgs = readPendingMessages("target-id");
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].meta).toEqual({});
+  });
+
+  test("readPendingMessages handles corrupted meta JSON gracefully", () => {
+    // Write directly with invalid JSON in meta column
+    const db2 = new Database(tmpDbPath);
+    const now = new Date().toISOString();
+    db2.run(
+      "INSERT INTO messages (from_session, to_session, content, meta, delivered, created_at) VALUES (?, ?, ?, ?, 0, ?)",
+      ["sender", "target-id", "hello", "not-valid-json", now]
+    );
+    db2.close();
+
+    const msgs = readPendingMessages("target-id");
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].meta).toEqual({});
+  });
+
+  test("meta with thread_id round-trips correctly", () => {
+    const meta = { thread_id: "thread-abc123" };
+    writeMessage("sender", "target-id", "hello", meta);
+    const msgs = readPendingMessages("target-id");
+    expect(msgs[0].meta.thread_id).toBe("thread-abc123");
+  });
+});
+
 describe("deleteDeliveredMessage", () => {
   test("deletes the message row", () => {
     writeMessage("sender", "target-id", "msg1");

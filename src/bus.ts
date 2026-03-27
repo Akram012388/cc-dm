@@ -60,10 +60,18 @@ export function initBus(dbPath?: string): void {
         from_session  TEXT NOT NULL,
         to_session    TEXT NOT NULL,
         content       TEXT NOT NULL,
+        meta          TEXT NOT NULL DEFAULT '{}',
         delivered     INTEGER NOT NULL DEFAULT 0,
         created_at    TEXT NOT NULL
       );
     `);
+
+    // Migration: add meta column for existing DBs
+    try {
+      db.run(`ALTER TABLE messages ADD COLUMN meta TEXT NOT NULL DEFAULT '{}'`);
+    } catch (err) {
+      if (!(err instanceof Error && err.message.includes("duplicate column"))) throw err;
+    }
 
     db.run(`
       CREATE INDEX IF NOT EXISTS idx_messages_to_delivered
@@ -142,13 +150,13 @@ export function expireStaleSessions(): void {
 
 // Note: fromName is a display name stored in the from_session column for
 // historical reasons. It is NOT a session ID — do not JOIN against sessions.id.
-export function writeMessage(fromName: string, toSessionId: string, content: string): boolean {
+export function writeMessage(fromName: string, toSessionId: string, content: string, meta: Record<string, string> = {}): boolean {
   try {
     const now = new Date().toISOString();
     db.run(
-      `INSERT INTO messages (from_session, to_session, content, delivered, created_at)
-       VALUES (?, ?, ?, 0, ?)`,
-      [fromName, toSessionId, content, now]
+      `INSERT INTO messages (from_session, to_session, content, meta, delivered, created_at)
+       VALUES (?, ?, ?, ?, 0, ?)`,
+      [fromName, toSessionId, content, JSON.stringify(meta), now]
     );
     return true;
   } catch (err) {
@@ -157,13 +165,17 @@ export function writeMessage(fromName: string, toSessionId: string, content: str
   }
 }
 
-export function readPendingMessages(sessionId: string): Array<{ id: number; from_session: string; content: string; created_at: string }> {
+export function readPendingMessages(sessionId: string): Array<{ id: number; from_session: string; content: string; meta: Record<string, string>; created_at: string }> {
   try {
-    return db.query<{ id: number; from_session: string; content: string; created_at: string }, [string]>(
-      `SELECT id, from_session, content, created_at FROM messages
+    const rows = db.query<{ id: number; from_session: string; content: string; meta: string; created_at: string }, [string]>(
+      `SELECT id, from_session, content, meta, created_at FROM messages
        WHERE to_session = ? AND delivered = 0
        ORDER BY id ASC`
     ).all(sessionId);
+    return rows.map((row) => ({
+      ...row,
+      meta: (() => { try { return JSON.parse(row.meta); } catch { return {}; } })(),
+    }));
   } catch (err) {
     console.error("[cc-dm/bus] readPendingMessages failed:", err);
     return [];

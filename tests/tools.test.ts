@@ -16,6 +16,8 @@ import {
   handleWho,
   handleBroadcast,
   withIdentity,
+  validateMetaKeys,
+  buildMeta,
 } from "../src/tools.js";
 
 let tmpDbPath: string;
@@ -63,6 +65,101 @@ describe("withIdentity", () => {
     const identity = { name: "test", role: "worker", project: "" };
     const enriched = withIdentity(result, identity);
     expect(enriched._identity.project).toBe("");
+  });
+});
+
+describe("validateMetaKeys", () => {
+  test("accepts valid keys", () => {
+    expect(validateMetaKeys({ priority: "urgent", thread_id: "abc" })).toBeNull();
+  });
+
+  test("accepts empty meta", () => {
+    expect(validateMetaKeys({})).toBeNull();
+  });
+
+  test("rejects keys with hyphens", () => {
+    const err = validateMetaKeys({ "my-key": "value" });
+    expect(err).toContain("my-key");
+    expect(err).toContain("invalid meta key");
+  });
+
+  test("rejects keys with dots", () => {
+    const err = validateMetaKeys({ "my.key": "value" });
+    expect(err).toContain("my.key");
+  });
+
+  test("rejects keys with spaces", () => {
+    const err = validateMetaKeys({ "my key": "value" });
+    expect(err).toContain("my key");
+  });
+});
+
+describe("buildMeta", () => {
+  test("builds meta from provided values", () => {
+    const { meta, error } = buildMeta("urgent", "task", "thread-123");
+    expect(error).toBeUndefined();
+    expect(meta).toEqual({ priority: "urgent", message_type: "task", thread_id: "thread-123" });
+  });
+
+  test("omits undefined values", () => {
+    const { meta } = buildMeta("urgent", undefined, undefined);
+    expect(meta).toEqual({ priority: "urgent" });
+  });
+
+  test("returns empty object when all undefined", () => {
+    const { meta } = buildMeta(undefined, undefined, undefined);
+    expect(meta).toEqual({});
+  });
+
+  test("rejects thread_id over 64 chars", () => {
+    const { meta, error } = buildMeta(undefined, undefined, "a".repeat(65));
+    expect(error).toContain("64 chars");
+    expect(meta).toEqual({});
+  });
+
+  test("accepts thread_id at exactly 64 chars", () => {
+    const { meta, error } = buildMeta(undefined, undefined, "a".repeat(64));
+    expect(error).toBeUndefined();
+    expect(meta.thread_id).toBe("a".repeat(64));
+  });
+});
+
+describe("handleDm with meta", () => {
+  test("passes meta through to message bus", () => {
+    registerSession("id-target", "target", "worker", "/tmp");
+    const result = handleDm("sender", "target", "hello", "", { priority: "urgent" });
+    expect(result.success).toBe(true);
+
+    const msgs = readPendingMessages("id-target");
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].meta).toEqual({ priority: "urgent" });
+  });
+
+  test("rejects invalid meta keys", () => {
+    registerSession("id-target2", "target2", "worker", "/tmp");
+    const result = handleDm("sender", "target2", "hello", "", { "bad-key": "value" });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("invalid meta key");
+  });
+});
+
+describe("handleBroadcast with meta", () => {
+  test("passes meta through to message bus", () => {
+    registerSession("id-sender", "sender", "worker", "/tmp");
+    registerSession("id-receiver", "receiver", "worker", "/tmp");
+    const result = handleBroadcast("id-sender", "sender", "hello", "", { message_type: "status" });
+    expect(result.success).toBe(true);
+
+    const msgs = readPendingMessages("id-receiver");
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].meta).toEqual({ message_type: "status" });
+  });
+
+  test("rejects invalid meta keys", () => {
+    registerSession("id-s", "s", "worker", "/tmp");
+    const result = handleBroadcast("id-s", "s", "hello", "", { "dot.key": "value" });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("invalid meta key");
   });
 });
 

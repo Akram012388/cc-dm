@@ -37,6 +37,32 @@ export type Identity = {
   project: string;
 };
 
+const META_KEY_RE = /^[a-zA-Z0-9_]+$/;
+
+export function validateMetaKeys(meta: Record<string, string>): string | null {
+  for (const key of Object.keys(meta)) {
+    if (!META_KEY_RE.test(key)) {
+      return `invalid meta key "${key}" — only letters, digits, and underscores allowed`;
+    }
+  }
+  return null;
+}
+
+export function buildMeta(
+  priority?: string,
+  messageType?: string,
+  threadId?: string,
+): { meta: Record<string, string>; error?: string } {
+  if (threadId && threadId.length > 64) {
+    return { meta: {}, error: "thread_id must be 64 chars or less" };
+  }
+  const meta: Record<string, string> = {};
+  if (priority) meta.priority = priority;
+  if (messageType) meta.message_type = messageType;
+  if (threadId) meta.thread_id = threadId;
+  return { meta };
+}
+
 export function withIdentity<T extends Record<string, unknown>>(
   result: T,
   identity: Identity
@@ -87,7 +113,7 @@ export function handleRegister(sessionId: string, name: string, role: string, pr
   }
 }
 
-export function handleDm(fromName: string, to: string, content: string, senderProject: string = ""): DmResult {
+export function handleDm(fromName: string, to: string, content: string, senderProject: string = "", meta: Record<string, string> = {}): DmResult {
   try {
     if (!fromName || fromName.trim().length === 0) {
       return { success: false, to: "", error: "from is required" };
@@ -100,6 +126,11 @@ export function handleDm(fromName: string, to: string, content: string, senderPr
     }
     if (content.length > 10_000) {
       return { success: false, to: "", error: "content must be under 10000 chars" };
+    }
+
+    const metaError = validateMetaKeys(meta);
+    if (metaError) {
+      return { success: false, to: "", error: metaError };
     }
 
     const cleanTo = sanitize(to);
@@ -120,7 +151,7 @@ export function handleDm(fromName: string, to: string, content: string, senderPr
     let failures = 0;
     for (const recipient of recipients) {
       if (senderProject !== "" && recipient.project !== senderProject) continue;
-      if (!writeMessage(fromName, recipient.id, content)) {
+      if (!writeMessage(fromName, recipient.id, content, meta)) {
         failures++;
       }
     }
@@ -145,7 +176,7 @@ export function handleWho(): WhoResult {
   }
 }
 
-export function handleBroadcast(fromId: string, fromName: string, content: string, senderProject: string = ""): BroadcastResult {
+export function handleBroadcast(fromId: string, fromName: string, content: string, senderProject: string = "", meta: Record<string, string> = {}): BroadcastResult {
   try {
     if (!fromId || fromId.trim().length === 0) {
       return { success: false, from: "", recipientCount: 0, error: "from is required" };
@@ -155,6 +186,11 @@ export function handleBroadcast(fromId: string, fromName: string, content: strin
     }
     if (content.length > 10_000) {
       return { success: false, from: fromName, recipientCount: 0, error: "content must be under 10000 chars" };
+    }
+
+    const metaError = validateMetaKeys(meta);
+    if (metaError) {
+      return { success: false, from: fromName, recipientCount: 0, error: metaError };
     }
 
     const sessions = listActiveSessions();
@@ -173,7 +209,7 @@ export function handleBroadcast(fromId: string, fromName: string, content: strin
     let failures = 0;
 
     for (const session of recipients) {
-      if (!writeMessage(fromName, session.id, content)) {
+      if (!writeMessage(fromName, session.id, content, meta)) {
         failures++;
       }
     }
