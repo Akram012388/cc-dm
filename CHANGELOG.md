@@ -20,6 +20,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - 20 new tests for VERDICT_RE matching, parseVerdict, formatPermissionRequest (132 total)
 - Role-based access control — `CC_DM_BROADCAST_ALLOWED_ROLES` restricts which roles can broadcast, `CC_DM_DM_ALLOWLIST` / `CC_DM_DM_BLOCKLIST` restrict DM targets (mutually exclusive, fatal error if both set)
 - 8 new tests for DM allowlist/blocklist guards and broadcast role restriction (140 total)
+- Ghost recovery name theft protection — `onGhost` callback checks `findSessionsByName` before re-registering; falls back to auto-generated session ID if the name was taken during the ghost window
+- Register skill: arguments fast path — when invoked with `name: X | role: Y | project: Z`, skips interactive prompts and registers directly
+- Register skill: conditional gate — allows re-registration when arguments are provided (previously blocked silently)
+- Register skill: stale session guidance — when name is held by an orphaned session after `/resume`, suggests waiting 60s or picking a different name
+- Troubleshooting section in cc-dm skill with self-diagnosis steps for common issues
+- Documented Claude Code session lifecycle: `/compact` preserves MCP servers, `/clear` and `/resume` restart them
+- Documented global name uniqueness across projects
 
 ## [1.2.0] - 2026-03-27
 

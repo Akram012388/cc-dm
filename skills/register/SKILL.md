@@ -7,6 +7,16 @@ description: Register this session with cc-dm — sets your session name, role, 
 
 Register this session with a user-chosen name, role, and optional project tag.
 
+## Arguments (fast path)
+
+If arguments are provided (e.g., `name: planner | role: worker | project: myapp`):
+1. Parse the provided name, role, and project from the arguments.
+2. Skip the pre-check gate and interactive prompts entirely.
+3. Call the `register` tool directly with the provided values.
+4. If the tool returns an error (e.g., name in use), report it clearly.
+5. If successful, confirm: "Registered as **{name}** with role **{role}**." If a project was set, add: "Broadcasts and DMs scoped to project **{project}**."
+6. Stop here — do not proceed to the pre-check or interactive registration.
+
 ## Pre-check (gate)
 
 Before prompting the user, determine if registration is needed:
@@ -14,7 +24,7 @@ Before prompting the user, determine if registration is needed:
 1. Read your session id from the MCP server instructions (the `"Your session id is ..."` line).
 2. Call the `who` tool to list active sessions.
 3. Find your session id in the results.
-   - If your session's `name` is different from your session id (i.e. not `session-XXXXXX`), registration was already done. **Stop here silently — do not prompt the user.**
+   - If your session's `name` is different from your session id (i.e. not `session-XXXXXX`), registration was already done AND no arguments were provided. **Stop here silently — do not prompt the user.**
    - If your session is not found or its name still equals the auto-generated id, proceed to registration.
 
 ## Registration steps
@@ -29,7 +39,7 @@ Before prompting the user, determine if registration is needed:
    - The user can leave this blank for no project (global broadcasts).
 7. Wait for their response.
 8. Call the `register` tool with the provided `name`, `role`, and `project` (if given).
-9. If the tool returns an error about the name being in use, show the error and ask the user to pick another name.
+9. If the tool returns an error about the name being in use, it may be a stale session from a previous `/resume` or `/clear`. Tell the user: **"That name is held by a stale session that will expire within 60 seconds. Wait and retry, or pick a different name."** Show the active session list.
 10. Confirm success: "Registered as **{name}** with role **{role}**." If a project was set, add: "Broadcasts and DMs scoped to project **{project}**."
 
 If registration fails for any other reason, report the error clearly.

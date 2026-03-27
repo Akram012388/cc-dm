@@ -105,6 +105,22 @@ DMs and broadcasts may be restricted by env var configuration:
 - If a broadcast fails with "not permitted to broadcast", this session's
   role is not in the allowed broadcast roles.
 
+## Troubleshooting
+
+If messages aren't arriving:
+1. Call `who` — verify your session is listed and last_seen is recent
+2. If not listed, call `register` to re-register
+3. If listed but messages still missing, check project scoping — you may be
+   in a different project from the sender
+4. Messages expire after 15 seconds — if the sender sent the message more
+   than 15s ago, it's gone
+5. If your session name shows as your session ID (session-XXXXXX) after
+   waking from sleep, your name may have been taken during the ghost window.
+   Call `register` to pick a new name.
+
+If you get "not configured" after compaction, call `who` to recover your
+identity.
+
 ## Rules
 
 - Never use console.log — you are inside an MCP stdio session

@@ -7,7 +7,7 @@ import {
   CallToolRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { initBus, readPendingMessages, deleteDeliveredMessage, deregisterSession, registerSession } from "./bus.js";
+import { initBus, readPendingMessages, deleteDeliveredMessage, deregisterSession, registerSession, findSessionsByName } from "./bus.js";
 import { handleDm, handleWho, handleRegister, handleBroadcast, withIdentity, buildMeta } from "./tools.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 import { sanitize } from "./sanitize.js";
@@ -438,8 +438,16 @@ async function main(): Promise<void> {
 
   startHeartbeat(SESSION_ID, () => {
     try {
-      registerSession(SESSION_ID, sessionName, sessionRole, process.cwd(), sessionProject);
-      console.error(`[cc-dm/heartbeat] session ghosted — re-registered as "${sessionName}"`);
+      const existing = findSessionsByName(sessionName);
+      const takenByOther = existing.some((s) => s.id !== SESSION_ID);
+      if (takenByOther) {
+        console.error(`[cc-dm/heartbeat] name "${sessionName}" taken during ghost window — re-registering as "${SESSION_ID}"`);
+        registerSession(SESSION_ID, SESSION_ID, sessionRole, process.cwd(), sessionProject);
+        sessionName = SESSION_ID;
+      } else {
+        registerSession(SESSION_ID, sessionName, sessionRole, process.cwd(), sessionProject);
+        console.error(`[cc-dm/heartbeat] session ghosted — re-registered as "${sessionName}"`);
+      }
     } catch (err) {
       console.error("[cc-dm/heartbeat] ghost re-registration failed:", err);
     }
