@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `validateMetaKeys()` and `buildMeta()` helpers in `tools.ts` — meta keys validated against channel protocol constraints (letters, digits, underscores only)
 - Stored meta attributes included in channel notification delivery — user meta spread BEFORE hardcoded routing fields to prevent spoofing
 - 16 new tests for meta round-trip, key validation, corrupted JSON fallback, and tool integration (110 total)
+- Permission relay — opt-in via `CC_DM_PERMISSION_RELAY=1`, enables remote tool approval/denial across sessions using the `claude/channel/permission` protocol capability
+- `CC_DM_PERMISSION_APPROVER` env var for targeted relay to a specific session (otherwise broadcasts to all project sessions)
+- `src/permission.ts` — pure functions: `VERDICT_RE`, `parseVerdict()`, `formatPermissionRequest()`
+- Verdict interception in poll loop — messages matching the verdict regex with a pending request ID are emitted as `notifications/claude/channel/permission` instead of regular channel notifications
+- In-memory `pendingPermissions` map with 5-minute expiry for stale requests
+- 20 new tests for VERDICT_RE matching, parseVerdict, formatPermissionRequest (132 total)
 
 ## [1.2.0] - 2026-03-27
 
