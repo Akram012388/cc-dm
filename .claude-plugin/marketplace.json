@@ -15,7 +15,7 @@
         "url": "https://github.com/Akram012388/cc-dm.git"
       },
       "description": "Peer-to-peer direct messaging between Claude Code sessions via the Channels protocol",
-      "version": "1.2.0"
+      "version": "1.3.0"
     }
   ]
 }

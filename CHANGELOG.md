@@ -4,14 +4,14 @@ All notable changes to cc-dm will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.3.0] - 2026-03-27
 
 ### Added
 - Message meta attributes — `dm` and `broadcast` tools accept optional `priority` (urgent/normal/low), `message_type` (task/question/status/review), and `thread_id` for conversation threading
 - `meta TEXT` column on messages table with JSON storage and automatic schema migration for existing DBs
 - `validateMetaKeys()` and `buildMeta()` helpers in `tools.ts` — meta keys validated against channel protocol constraints (letters, digits, underscores only)
 - Stored meta attributes included in channel notification delivery — user meta spread BEFORE hardcoded routing fields to prevent spoofing
-- 16 new tests for meta round-trip, key validation, corrupted JSON fallback, and tool integration (110 total)
+- 18 new tests for meta round-trip, key validation, corrupted JSON fallback, thread_id validation, and tool integration (112 total)
 - Permission relay — opt-in via `CC_DM_PERMISSION_RELAY=1`, enables remote tool approval/denial across sessions using the `claude/channel/permission` protocol capability
 - `CC_DM_PERMISSION_APPROVER` env var for targeted relay to a specific session (otherwise broadcasts to all project sessions)
 - `src/permission.ts` — pure functions: `VERDICT_RE`, `parseVerdict()`, `formatPermissionRequest()`

@@ -233,6 +233,7 @@ bun -e "
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| [v1.3.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.3.0) | 2026-03-27 | Message metadata, permission relay, role-based access control |
 | [v1.2.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.2.0) | 2026-03-27 | Compaction resilience, heartbeat self-heal |
 | [v1.1.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.1.0) | 2026-03-24 | Project-scoped messaging, [npm package](https://www.npmjs.com/package/cc-dm) published |
 | [v1.0.0](https://github.com/Akram012388/cc-dm/releases/tag/v1.0.0) | 2026-03-22 | Production release — duplicate delivery guard, same-name protection, stronger session IDs |

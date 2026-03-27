@@ -132,7 +132,7 @@ const permissionNote = PERMISSION_RELAY
   : "";
 
 const server = new Server<never, ChannelNotification | PermissionVerdict>(
-  { name: "cc-dm", version: "1.2.0" },
+  { name: "cc-dm", version: "1.3.0" },
   {
     capabilities: {
       experimental: experimentalCapabilities,
