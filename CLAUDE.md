@@ -18,12 +18,13 @@ cc-dm is a Claude Code Channel plugin that enables direct peer-to-peer messaging
 .claude-plugin/hooks/hooks.json  PreCompact hook for compaction identity recovery
 src/bus.ts                       SQLite WAL bus, sessions + messages tables
 src/tools.ts                     Four tool handlers: dm, who, register, broadcast
+src/permission.ts                Pure functions for permission relay: VERDICT_RE, parseVerdict, formatPermissionRequest
 src/sanitize.ts                  Shared string sanitizer (trim, lowercase, spaces→hyphens)
 src/heartbeat.ts                 30s heartbeat writer, 60s session expiry + 15s message expiry, ghost self-heal
-src/server.ts                    MCP entry point, claude/channel capability, poll loop, shutdown
+src/server.ts                    MCP entry point, claude/channel capability, permission relay, poll loop, shutdown
 skills/cc-dm/SKILL.md            Skill for natural language usage
 skills/register/SKILL.md         Interactive session registration skill
-tests/                           Unit + integration tests (94 tests, bun:test)
+tests/                           Unit + integration tests (140 tests, bun:test)
 CHANGELOG.md                     Version history
 LICENSE                          MIT license
 install.sh                       curl | bash installer
@@ -35,9 +36,10 @@ Channel capability declared via:
 
 ```ts
 capabilities.experimental['claude/channel']: {}
+capabilities.experimental['claude/channel/permission']: {}  // opt-in, gated on CC_DM_PERMISSION_RELAY=1
 ```
 
-SDK notification type extended via `Server<never, ChannelNotification>` generic to support the custom `notifications/claude/channel` method.
+SDK notification type extended via `Server<never, ChannelNotification | PermissionVerdict>` generic to support `notifications/claude/channel` (messaging) and `notifications/claude/channel/permission` (verdict relay) methods.
 
 Poll loop: `setInterval` at 500ms with async inner callback. Uses `readPendingMessages` to read, `server.notification()` to deliver, then `deleteDeliveredMessage` to remove the row. Each message has its own try/catch so one failure doesn't block the batch.
 
@@ -54,6 +56,12 @@ Project-scoped messaging: If a session has a non-empty `project` tag, both `hand
 Compaction resilience: MCP stdio servers survive `/compact` and auto-compaction — the process keeps running with the same session ID, in-memory state, and DB registration. The only failure mode is context-level: the static MCP `instructions` string (set once at server construction) still says "not configured" after interactive registration, and compaction compresses away the conversation context that recorded registration. Two layers address this: (1) every tool response includes `_identity: { name, role, project }` via `withIdentity()` so the first tool call after compaction restores identity awareness, and (2) a `PreCompact` command hook in `.claude-plugin/hooks/hooks.json` nudges Claude to call `who` to recover identity on next interaction. Incoming channel messages also carry `meta.to_session = sessionName`, providing a free identity reminder on message delivery.
 
 Heartbeat self-heal: `updateHeartbeat()` returns the number of rows affected (via `RETURNING id` clause — bun:sqlite doesn't expose `db.changes`). If 0, the session row was deleted (e.g., by another session's `expireStaleSessions` after system sleep). `startHeartbeat` accepts an optional `onGhost` callback; when the heartbeat detects 0 rows affected, it calls the callback. In `server.ts`, the callback calls `registerSession()` directly (not `handleRegister` — avoids the name-uniqueness check that would false-positive on the session's own name) with current `sessionName`/`sessionRole`/`sessionProject` from the mutable closure. Recovery happens within one heartbeat interval (~30s). During the gap, the session is unreachable via DM/broadcast but the MCP process continues running.
+
+Message meta attributes: The `messages` table has a `meta TEXT NOT NULL DEFAULT '{}'` column storing JSON. `writeMessage` accepts an optional `meta: Record<string, string>` param. `readPendingMessages` returns parsed meta with defensive `JSON.parse` (corrupted JSON falls back to `{}`). The `dm` and `broadcast` tools accept optional `priority` (enum: urgent/normal/low), `message_type` (enum: task/question/status/review), and `thread_id` (string, max 64 chars). Meta keys are validated against the channel protocol constraint: `/^[a-zA-Z0-9_]+$/` (hyphens/dots/spaces rejected early). In the poll loop, stored meta is spread BEFORE hardcoded routing fields (`from_session`, `to_session`, `message_id`, `sent_at`) so hardcoded fields always win — prevents meta spoofing of routing attributes. `buildMeta()` returns `{ meta, error? }` for runtime thread_id length enforcement.
+
+Permission relay: Opt-in via `CC_DM_PERMISSION_RELAY=1`. When enabled, the server declares `claude/channel/permission: {}` capability and registers a `setNotificationHandler` for inbound `notifications/claude/channel/permission_request` from Claude Code. On receiving a permission request, the handler stores it in an in-memory `pendingPermissions: Map<string, PendingPermission>` and relays it via DM (if `CC_DM_PERMISSION_APPROVER` is set) or broadcast (if not). The approver sees a formatted message with instructions to reply `yes <id>` or `no <id>`. In the poll loop, before regular delivery, each message is checked against `parseVerdict()` from `permission.ts`. If the content matches `VERDICT_RE` and the captured request ID exists in the pending map, the message is emitted as `notifications/claude/channel/permission` instead of a regular channel notification, the pending entry is deleted, and the message is not delivered as chat. Stale pending permissions are cleaned up every poll tick (5-minute expiry). The permission relay's internal `handleDm`/`handleBroadcast` calls use default params, bypassing access control — the relay is a system-level mechanism.
+
+Role-based access control: Three optional env vars parsed at startup as `Set<string>`: `CC_DM_BROADCAST_ALLOWED_ROLES` (comma-separated roles permitted to broadcast), `CC_DM_DM_ALLOWLIST` (sessions this session can DM), `CC_DM_DM_BLOCKLIST` (sessions this session cannot DM). Allowlist and blocklist are mutually exclusive — both set causes a fatal error at startup (`process.exit(1)`). Guards are in `tools.ts` at the top of `handleDm` (after sanitize, before DB lookup) and `handleBroadcast` (before meta validation). All sender-side; no receive-side filtering. Empty sets impose no restriction (v1.2.0 behavior).
 
 Bus path: `~/.cc-dm/bus.db`
 
@@ -83,7 +91,7 @@ MCP server config is inline in `.claude-plugin/plugin.json` (not a separate `.mc
 ## Testing
 
 ```bash
-bun test                   # 88 unit + integration tests
+bun test                   # 140 unit + integration tests
 bun run typecheck          # must pass before any commit
 bun run src/bus.ts         # bus smoke test
 bun run src/tools.ts       # tools smoke test

@@ -25,6 +25,14 @@ When the user says "dm [session] [message]" or "tell [session] [message]":
 
   Use the dm tool.
   Example: dm(to="backend", content="auth spec is ready")
+  With metadata: dm(to="backend", content="deploy broken", priority="urgent", message_type="status")
+
+Optional metadata fields on dm and broadcast:
+- priority: "urgent", "normal", or "low"
+- message_type: "task", "question", "status", or "review"
+- thread_id: string (max 64 chars) for grouping related messages
+
+These appear as attributes on the <channel> tag the receiver sees.
 
 If this session has a project tag set, DMs can only reach sessions in the
 same project. A DM to a session outside the project will return an error.
@@ -72,6 +80,30 @@ cc-dm tool call after compaction restores your identity. Do NOT re-register.
 
 If you are unsure of your identity, call the `who` tool and match your
 session ID (from the MCP instructions) against the results.
+
+## Permission relay
+
+If this session has `CC_DM_PERMISSION_RELAY=1` enabled, tool approval
+requests are relayed to other sessions instead of showing a local dialog.
+When you receive a permission request from another session, it will look like:
+
+  [Permission Request] Session "worker" wants to use Bash:
+    Execute a shell command
+    Request ID: abcde
+
+  Reply with "yes abcde" to approve or "no abcde" to deny.
+
+To approve or deny, use the dm tool with the exact verdict format:
+  dm(to="worker", content="yes abcde")  — to approve
+  dm(to="worker", content="no abcde")   — to deny
+
+## Access control
+
+DMs and broadcasts may be restricted by env var configuration:
+- If a DM fails with "not in this session's DM allowlist", the target
+  is not on this session's allowed list. Ask the user to check env vars.
+- If a broadcast fails with "not permitted to broadcast", this session's
+  role is not in the allowed broadcast roles.
 
 ## Rules
 

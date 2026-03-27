@@ -122,6 +122,8 @@ Set these environment variables before launching:
 - `CC_DM_SESSION_ROLE` — your role (e.g. `orchestrator`, `worker`, `reviewer`)
 - `CC_DM_SESSION_PROJECT` — optional project tag (e.g. `myapp`, `api-server`)
 
+See also: [Message metadata](#message-metadata), [Permission relay](#permission-relay), [Access control](#access-control) for optional env vars that enable advanced features.
+
 If not set, Claude will ask you to register via the `/cc-dm:register` skill on first interaction. Each session gets an auto-generated internal ID (`session-<random hex>`) used for message routing. Sessions send a heartbeat every 30 seconds. A session with no heartbeat for 60 seconds is automatically deleted from the roster. Undelivered messages expire after 15 seconds. No manual cleanup needed.
 
 > **Recommended naming convention:** Use `[project]-[name]` for session names, e.g. `myapp-planner`, `myapp-backend`, `myapp-tests`. Keep the prefix consistent across all workers in the same project and ensure it matches the `CC_DM_SESSION_PROJECT` value. This makes `who` output immediately scannable and helps Claude associate sessions with their project context at a glance.
@@ -146,6 +148,69 @@ A broadcast from `frontend` reaches `backend` but not `api-dev`. A DM from `fron
 You can also set the project interactively via `/cc-dm:register` — the skill shows active project tags so you can pick an existing one.
 
 > **Note:** Project scoping is an opinionated default designed for structured multi-project workflows. You can override it at any time — use `/cc-dm:register` or say "register" to change a session's project tag, clear it for global access, or scope it to a different project. This lets you mix isolation styles: keep most workers scoped to their project while leaving a coordinator session global, or temporarily remove a session's project tag when it needs to reach across boundaries.
+
+## Message metadata
+
+The `dm` and `broadcast` tools accept optional metadata fields that are delivered as attributes on the `<channel>` tag:
+
+- **`priority`** — `urgent`, `normal`, or `low`
+- **`message_type`** — `task`, `question`, `status`, or `review`
+- **`thread_id`** — any string (max 64 chars) to group related messages into a conversation thread
+
+These are purely informational — they don't change delivery behavior. The receiving session's Claude uses them to prioritize, filter, or group messages contextually. If omitted, messages work exactly as before.
+
+> **Example:** `dm(to="backend", content="deploy is broken", priority="urgent", message_type="status")` delivers with `priority="urgent"` and `message_type="status"` visible in the channel event attributes.
+
+## Permission relay
+
+Enables one session to remotely approve or deny tool calls for another session, using the Claude Code Channels `claude/channel/permission` protocol capability. Completely opt-in — off by default.
+
+**Setup:** Add these env vars when launching a worker session that needs remote approval:
+
+```bash
+CC_DM_PERMISSION_RELAY=1 \
+CC_DM_PERMISSION_APPROVER=orchestrator \
+CC_DM_SESSION_NAME=worker CC_DM_SESSION_ROLE=worker CC_DM_SESSION_PROJECT=myapp \
+claude --dangerously-load-development-channels plugin:cc-dm@cc-dm-marketplace
+```
+
+**How it works:**
+1. Worker wants to run a tool (e.g., `Bash rm -rf dist/`)
+2. Instead of showing a local approval dialog, cc-dm relays the request to the `orchestrator` session
+3. Orchestrator sees: *"Session worker wants to use Bash... Reply with `yes abcde` or `no abcde`"*
+4. Orchestrator replies with the verdict — worker's tool call is approved or denied
+
+If `CC_DM_PERMISSION_APPROVER` is not set, the request broadcasts to all project sessions — first response wins. The local terminal approval dialog is always available as a fallback.
+
+| Env var | Required? | Purpose |
+|---------|-----------|---------|
+| `CC_DM_PERMISSION_RELAY=1` | Yes | Enables the relay; without this, nothing changes |
+| `CC_DM_PERMISSION_APPROVER` | No | Name of the session that approves (omit for broadcast) |
+
+## Access control
+
+Optional sender-side restrictions on who can broadcast and who you can DM. All env vars are parsed at session startup — no runtime changes.
+
+```bash
+# Only orchestrators and architects can broadcast from this session
+CC_DM_BROADCAST_ALLOWED_ROLES=orchestrator,architect
+
+# This session can only DM these specific sessions
+CC_DM_DM_ALLOWLIST=planner,reviewer
+
+# OR: this session can DM anyone EXCEPT these (mutually exclusive with allowlist)
+CC_DM_DM_BLOCKLIST=intern
+```
+
+| Env var | Purpose |
+|---------|---------|
+| `CC_DM_BROADCAST_ALLOWED_ROLES` | Comma-separated roles allowed to broadcast. Empty = no restriction. |
+| `CC_DM_DM_ALLOWLIST` | Comma-separated session names this session can DM. Empty = no restriction. |
+| `CC_DM_DM_BLOCKLIST` | Comma-separated session names this session cannot DM. Empty = no restriction. |
+
+`CC_DM_DM_ALLOWLIST` and `CC_DM_DM_BLOCKLIST` are mutually exclusive — setting both causes a fatal error at startup. If neither is set, the session can DM anyone in its project (the default behavior).
+
+> **Note:** Access control is sender-side only. It restricts what THIS session can send, not what it can receive. A session blocked by your allowlist can still DM you.
 
 ## Remote access
 
