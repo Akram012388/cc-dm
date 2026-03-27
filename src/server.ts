@@ -6,10 +6,12 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 import { initBus, readPendingMessages, deleteDeliveredMessage, deregisterSession, registerSession } from "./bus.js";
 import { handleDm, handleWho, handleRegister, handleBroadcast, withIdentity, buildMeta } from "./tools.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 import { sanitize } from "./sanitize.js";
+import { parseVerdict, formatPermissionRequest } from "./permission.js";
 
 const SESSION_ID = `session-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 
@@ -34,6 +36,9 @@ let sessionName = SESSION_NAME;
 let sessionRole = SESSION_ROLE;
 let sessionProject = SESSION_PROJECT;
 
+const PERMISSION_RELAY = process.env.CC_DM_PERMISSION_RELAY === "1";
+const PERMISSION_APPROVER = process.env.CC_DM_PERMISSION_APPROVER?.trim() || "";
+
 type ChannelNotification = {
   method: "notifications/claude/channel";
   params: {
@@ -41,6 +46,40 @@ type ChannelNotification = {
     meta: Record<string, string>;
   };
 };
+
+type PermissionVerdict = {
+  method: "notifications/claude/channel/permission";
+  params: {
+    request_id: string;
+    behavior: "allow" | "deny";
+  };
+};
+
+type PendingPermission = {
+  requestId: string;
+  timestamp: number;
+};
+
+const pendingPermissions = new Map<string, PendingPermission>();
+
+const PERMISSION_EXPIRY_MS = 5 * 60 * 1000;
+
+function cleanupExpiredPermissions(): void {
+  const cutoff = Date.now() - PERMISSION_EXPIRY_MS;
+  for (const [id, entry] of pendingPermissions) {
+    if (entry.timestamp < cutoff) pendingPermissions.delete(id);
+  }
+}
+
+const PermissionRequestNotificationSchema = z.object({
+  method: z.literal("notifications/claude/channel/permission_request"),
+  params: z.object({
+    request_id: z.string(),
+    tool_name: z.string(),
+    description: z.string(),
+    input_preview: z.string(),
+  }),
+});
 
 function buildRegistrationInstruction(): string {
   if (NAME_PROVIDED && ROLE_PROVIDED) {
@@ -57,14 +96,23 @@ function buildRegistrationInstruction(): string {
 
 const registrationInstruction = buildRegistrationInstruction();
 
-const server = new Server<never, ChannelNotification>(
+const experimentalCapabilities: Record<string, object> = { "claude/channel": {} };
+if (PERMISSION_RELAY) {
+  experimentalCapabilities["claude/channel/permission"] = {};
+}
+
+const permissionNote = PERMISSION_RELAY
+  ? ` Tool approvals for this session are relayed via cc-dm${PERMISSION_APPROVER ? ` to "${PERMISSION_APPROVER}"` : " to all project sessions"}. Approvals may take longer than usual.`
+  : "";
+
+const server = new Server<never, ChannelNotification | PermissionVerdict>(
   { name: "cc-dm", version: "1.2.0" },
   {
     capabilities: {
-      experimental: { "claude/channel": {} },
+      experimental: experimentalCapabilities,
       tools: {},
     },
-    instructions: `You are connected to cc-dm. Your session id is "${SESSION_ID}". ${registrationInstruction} Messages from other sessions arrive as <channel source="cc-dm" from_session="..." to_session="...">. Act on messages addressed to your session name. Available tools: register, dm, who, broadcast.`,
+    instructions: `You are connected to cc-dm. Your session id is "${SESSION_ID}". ${registrationInstruction}${permissionNote} Messages from other sessions arrive as <channel source="cc-dm" from_session="..." to_session="...">. Act on messages addressed to your session name. Available tools: register, dm, who, broadcast.`,
   }
 );
 
@@ -247,6 +295,7 @@ const deliveredIds = new Set<number>();
 function startPollLoop(): void {
   pollTimer = setInterval(async () => {
     try {
+      cleanupExpiredPermissions();
       const messages = readPendingMessages(SESSION_ID);
       if (messages.length === 0) return;
 
@@ -255,6 +304,29 @@ function startPollLoop(): void {
           try { deleteDeliveredMessage(message.id); } catch (err) { console.error(`[cc-dm/poll] retry delete failed for message ${message.id}:`, err); }
           continue;
         }
+
+        // Verdict interception: check if this message is a permission verdict
+        if (PERMISSION_RELAY && pendingPermissions.size > 0) {
+          const verdict = parseVerdict(message.content);
+          if (verdict && pendingPermissions.has(verdict.requestId)) {
+            try {
+              await server.notification({
+                method: "notifications/claude/channel/permission",
+                params: {
+                  request_id: verdict.requestId,
+                  behavior: verdict.behavior,
+                },
+              });
+              pendingPermissions.delete(verdict.requestId);
+              console.error(`[cc-dm/permission] verdict "${verdict.behavior}" for request ${verdict.requestId} from ${message.from_session}`);
+              deleteDeliveredMessage(message.id);
+            } catch (err) {
+              console.error(`[cc-dm/permission] failed to deliver verdict for ${verdict.requestId}:`, err);
+            }
+            continue;
+          }
+        }
+
         try {
           await server.notification({
             method: "notifications/claude/channel",
@@ -306,6 +378,33 @@ async function main(): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  if (PERMISSION_RELAY) {
+    server.setNotificationHandler(PermissionRequestNotificationSchema, async ({ params }) => {
+      const { request_id, tool_name, description, input_preview } = params;
+      pendingPermissions.set(request_id, { requestId: request_id, timestamp: Date.now() });
+      const content = formatPermissionRequest({
+        requestId: request_id,
+        toolName: tool_name,
+        description,
+        inputPreview: input_preview,
+        fromSession: sessionName,
+      });
+
+      if (PERMISSION_APPROVER) {
+        const result = handleDm(sessionName, PERMISSION_APPROVER, content, sessionProject);
+        if (!result.success) {
+          console.error(`[cc-dm/permission] failed to relay request ${request_id} to "${PERMISSION_APPROVER}": ${result.error}`);
+        } else {
+          console.error(`[cc-dm/permission] relayed request ${request_id} (${tool_name}) to "${PERMISSION_APPROVER}"`);
+        }
+      } else {
+        const result = handleBroadcast(SESSION_ID, sessionName, content, sessionProject);
+        console.error(`[cc-dm/permission] broadcast request ${request_id} (${tool_name}) to ${result.recipientCount} session(s)`);
+      }
+    });
+    console.error(`[cc-dm/permission] relay enabled${PERMISSION_APPROVER ? ` → approver: "${PERMISSION_APPROVER}"` : " → broadcast to project"}`);
+  }
 
   startHeartbeat(SESSION_ID, () => {
     try {
