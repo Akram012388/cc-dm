@@ -113,7 +113,7 @@ export function handleRegister(sessionId: string, name: string, role: string, pr
   }
 }
 
-export function handleDm(fromName: string, to: string, content: string, senderProject: string = "", meta: Record<string, string> = {}): DmResult {
+export function handleDm(fromName: string, to: string, content: string, senderProject: string = "", meta: Record<string, string> = {}, dmAllowlist: Set<string> = new Set(), dmBlocklist: Set<string> = new Set()): DmResult {
   try {
     if (!fromName || fromName.trim().length === 0) {
       return { success: false, to: "", error: "from is required" };
@@ -134,6 +134,13 @@ export function handleDm(fromName: string, to: string, content: string, senderPr
     }
 
     const cleanTo = sanitize(to);
+
+    if (dmAllowlist.size > 0 && !dmAllowlist.has(cleanTo)) {
+      return { success: false, to: cleanTo, error: `"${cleanTo}" is not in this session's DM allowlist` };
+    }
+    if (dmBlocklist.size > 0 && dmBlocklist.has(cleanTo)) {
+      return { success: false, to: cleanTo, error: `"${cleanTo}" is blocked by this session's DM blocklist` };
+    }
     const recipients = findSessionsByName(cleanTo);
     if (recipients.length === 0) {
       return { success: false, to: cleanTo, error: "no active session with that name" };
@@ -176,7 +183,7 @@ export function handleWho(): WhoResult {
   }
 }
 
-export function handleBroadcast(fromId: string, fromName: string, content: string, senderProject: string = "", meta: Record<string, string> = {}): BroadcastResult {
+export function handleBroadcast(fromId: string, fromName: string, content: string, senderProject: string = "", meta: Record<string, string> = {}, senderRole: string = "", broadcastAllowedRoles: Set<string> = new Set()): BroadcastResult {
   try {
     if (!fromId || fromId.trim().length === 0) {
       return { success: false, from: "", recipientCount: 0, error: "from is required" };
@@ -186,6 +193,10 @@ export function handleBroadcast(fromId: string, fromName: string, content: strin
     }
     if (content.length > 10_000) {
       return { success: false, from: fromName, recipientCount: 0, error: "content must be under 10000 chars" };
+    }
+
+    if (broadcastAllowedRoles.size > 0 && !broadcastAllowedRoles.has(senderRole)) {
+      return { success: false, from: fromName, recipientCount: 0, error: `role "${senderRole}" is not permitted to broadcast` };
     }
 
     const metaError = validateMetaKeys(meta);

@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Verdict interception in poll loop — messages matching the verdict regex with a pending request ID are emitted as `notifications/claude/channel/permission` instead of regular channel notifications
 - In-memory `pendingPermissions` map with 5-minute expiry for stale requests
 - 20 new tests for VERDICT_RE matching, parseVerdict, formatPermissionRequest (132 total)
+- Role-based access control — `CC_DM_BROADCAST_ALLOWED_ROLES` restricts which roles can broadcast, `CC_DM_DM_ALLOWLIST` / `CC_DM_DM_BLOCKLIST` restrict DM targets (mutually exclusive, fatal error if both set)
+- 8 new tests for DM allowlist/blocklist guards and broadcast role restriction (140 total)
 
 ## [1.2.0] - 2026-03-27
 
