@@ -39,6 +39,32 @@ let sessionProject = SESSION_PROJECT;
 const PERMISSION_RELAY = process.env.CC_DM_PERMISSION_RELAY === "1";
 const PERMISSION_APPROVER = process.env.CC_DM_PERMISSION_APPROVER?.trim() || "";
 
+const BROADCAST_ALLOWED_ROLES = new Set(
+  (process.env.CC_DM_BROADCAST_ALLOWED_ROLES?.trim() || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+const DM_ALLOWLIST = new Set(
+  (process.env.CC_DM_DM_ALLOWLIST?.trim() || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+const DM_BLOCKLIST = new Set(
+  (process.env.CC_DM_DM_BLOCKLIST?.trim() || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+if (DM_ALLOWLIST.size > 0 && DM_BLOCKLIST.size > 0) {
+  console.error("[cc-dm] Fatal: CC_DM_DM_ALLOWLIST and CC_DM_DM_BLOCKLIST are mutually exclusive. Set one or neither.");
+  process.exit(1);
+}
+
 type ChannelNotification = {
   method: "notifications/claude/channel";
   params: {
@@ -253,7 +279,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         String(req.params.arguments?.to ?? ""),
         String(req.params.arguments?.content ?? ""),
         sessionProject,
-        meta
+        meta,
+        DM_ALLOWLIST,
+        DM_BLOCKLIST
       );
       const enriched = withIdentity(result, { name: sessionName, role: sessionRole, project: sessionProject });
       return { content: [{ type: "text" as const, text: JSON.stringify(enriched, null, 2) }] };
@@ -279,7 +307,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         sessionName,
         String(req.params.arguments?.content ?? ""),
         sessionProject,
-        meta
+        meta,
+        sessionRole,
+        BROADCAST_ALLOWED_ROLES
       );
       const enriched = withIdentity(result, { name: sessionName, role: sessionRole, project: sessionProject });
       return { content: [{ type: "text" as const, text: JSON.stringify(enriched, null, 2) }] };

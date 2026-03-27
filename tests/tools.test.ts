@@ -163,6 +163,71 @@ describe("handleBroadcast with meta", () => {
   });
 });
 
+describe("handleDm access control", () => {
+  test("allowlist permits listed targets", () => {
+    registerSession("id-alice", "alice", "worker", "/tmp");
+    const allow = new Set(["alice"]);
+    const result = handleDm("sender", "alice", "hi", "", {}, allow, new Set());
+    expect(result.success).toBe(true);
+  });
+
+  test("allowlist blocks unlisted targets", () => {
+    registerSession("id-bob", "bob", "worker", "/tmp");
+    const allow = new Set(["alice"]);
+    const result = handleDm("sender", "bob", "hi", "", {}, allow, new Set());
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("allowlist");
+  });
+
+  test("blocklist blocks listed targets", () => {
+    registerSession("id-charlie", "charlie", "worker", "/tmp");
+    const block = new Set(["charlie"]);
+    const result = handleDm("sender", "charlie", "hi", "", {}, new Set(), block);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("blocklist");
+  });
+
+  test("blocklist permits unlisted targets", () => {
+    registerSession("id-dave", "dave", "worker", "/tmp");
+    const block = new Set(["other"]);
+    const result = handleDm("sender", "dave", "hi", "", {}, new Set(), block);
+    expect(result.success).toBe(true);
+  });
+
+  test("empty sets impose no restriction", () => {
+    registerSession("id-eve", "eve", "worker", "/tmp");
+    const result = handleDm("sender", "eve", "hi", "", {}, new Set(), new Set());
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("handleBroadcast access control", () => {
+  test("allowed role can broadcast", () => {
+    registerSession("id-orch", "orch", "orchestrator", "/tmp");
+    registerSession("id-recv", "recv", "worker", "/tmp");
+    const allowed = new Set(["orchestrator"]);
+    const result = handleBroadcast("id-orch", "orch", "hello", "", {}, "orchestrator", allowed);
+    expect(result.success).toBe(true);
+    expect(result.recipientCount).toBe(1);
+  });
+
+  test("disallowed role cannot broadcast", () => {
+    registerSession("id-wrk", "wrk", "worker", "/tmp");
+    registerSession("id-rcv2", "rcv2", "worker", "/tmp");
+    const allowed = new Set(["orchestrator"]);
+    const result = handleBroadcast("id-wrk", "wrk", "hello", "", {}, "worker", allowed);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("not permitted to broadcast");
+  });
+
+  test("empty allowed roles imposes no restriction", () => {
+    registerSession("id-any", "any", "intern", "/tmp");
+    registerSession("id-rcv3", "rcv3", "worker", "/tmp");
+    const result = handleBroadcast("id-any", "any", "hello", "", {}, "intern", new Set());
+    expect(result.success).toBe(true);
+  });
+});
+
 describe("handleRegister", () => {
   test("validates empty name", () => {
     const result = handleRegister("test-id", "", "worker");
