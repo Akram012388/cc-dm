@@ -216,6 +216,17 @@ CC_DM_DM_BLOCKLIST=intern
 
 Claude Code has a built-in `/remote-control` feature that lets you access any session from the Claude iOS app. This pairs naturally with cc-dm — run multiple named sessions locally, drop into any one from your phone, and use cc-dm to coordinate between them.
 
+## Live stream viewer
+
+[cc-dm-stream](https://github.com/Akram012388/cc-dm-stream) is a companion TUI that renders session registrations, messages, broadcasts, and lifecycle events in real time. Run it in a separate terminal to observe the cc-dm bus without joining as a session.
+
+```bash
+cc-dm-stream                      # watch all traffic
+cc-dm-stream --project myapp      # filter by project
+```
+
+Install from within Claude Code using `/cc-dm:install-stream`, or see the [cc-dm-stream repo](https://github.com/Akram012388/cc-dm-stream) for manual install options.
+
 ## Bus inspection
 
 Inspect the SQLite bus directly at any time:
@@ -255,7 +266,7 @@ Built on Claude Code Channels (research preview, v2.1.80+). The `--dangerously-l
 ## Built by
 
 Shaikh Akram Ahmed — architect turned builder, Muscat, Oman.
-https://github.com/Akram012388
+https://github.com/Akram012388 · https://x.com/CodeAkram
 
 ## Privacy
 
